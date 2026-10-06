@@ -17,7 +17,7 @@ Plataforma para una panadería en Caracas con cuatro roles:
 
 | # | Decisión |
 |---|---|
-| D-1 | **Precios en USD** y se muestran también en **Bs a tasa BCV**. Lógica de tasa de OpenGravity: la manual del día manda; luego la fila BCV del día; luego DolarAPI; luego la última conocida. |
+| D-1 | **Precios en USD** y se muestran también en **Bs a tasa BCV**. Tasa del día con `rate_for(fecha)`: la MANUAL de esa fecha; si no hay, la BCV de esa fecha (DolarAPI oficial, como en OpenGravity); si no hay, la más reciente anterior. La misma función sirve para mostrar Bs y para convertir pagos (03 §0). |
 | D-2 | **Registro sin aprobación.** Todo cliente nuevo queda en modo **contado** (`CASH`). El admin puede habilitar **crédito** (`CREDIT`) con límite y días. |
 | D-3 | **Pedidos programados:** “Lo quiero hoy” (lo antes posible) o **fecha y hora** personalizadas. Producción los ve en cola con la **fecha en grande**. |
 | D-4 | **Contado:** paga al terminar el pedido en la misma app. Si la billetera alcanza, **se descuenta sin preguntar**. Si no alcanza, **usa el saldo y pide la diferencia**: muestra los datos de pago y pide número de referencia y comprobante. |

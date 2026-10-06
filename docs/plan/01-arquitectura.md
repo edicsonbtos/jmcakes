@@ -1,130 +1,119 @@
-# 01 — Arquitectura y stack (v2: reutiliza OpenGravity)
+# 01 — Arquitectura y stack (v2.1)
 
 ## Vista general
-
 ```
-App Android Cliente ─┐                      ┌──────────── Railway · proyecto "jmcakes" ────────────┐
-(Play Store)         │  HTTPS (Bearer JWT)  │                                                       │
-App Android Delivery ┼─────────────────────▶│  api  · FastAPI + SQLAlchemy 2 async + Alembic        │──▶ Neon Postgres
-(APK)                │                      │       · REST /api/v1  (OpenAPI generado)              │    proyecto "jmcakes"
-                     │                      │       · SSE  /api/v1/events (cocina, admin)           │    ramas: main · staging
-Navegador ───────────┘                      │       · APScheduler: tasa BCV 06:00, cierre 23:50,    │
- /admin  (admin)        cookie authToken    │         auto-cancelación de impagos                   │──▶ FCM (push)
- /cocina (producción) ─────────────────────▶│  web  · Next.js 16 + Tailwind 4 (panel + cocina)      │──▶ Railway Bucket (fotos,
-                                            └───────────────────────────────────────────────────────┘    comprobantes)
+App Android Cliente ─┐  HTTPS · Bearer JWT    ┌──────────── Railway · proyecto "jmcakes" · 1 réplica ─────────┐
+App Android Delivery ┼──────────────────────▶ │ api  FastAPI + SQLAlchemy 2 async (psycopg 3) + Alembic        │──▶ Neon Postgres "jmcakes"
+                     │                        │      REST /api/v1 (OpenAPI generado, JSON camelCase)          │    (pooler: app · directa: Alembic)
+Navegador ───────────┘  cookies httpOnly      │      SSE /api/v1/events · APScheduler (TZ Caracas)            │──▶ FCM (opcional)
+ /admin  · /cocina  ───────────────────────▶  │ web  Next.js 16 + Tailwind 4                                   │──▶ Railway Bucket (archivos)
+                                              └────────────────────────────────────────────────────────────────┘
 ```
 
 ## Stack
-
-| Capa | Elección | De dónde viene |
-|---|---|---|
-| API | **Python 3.11+ · FastAPI · SQLAlchemy 2.0 async · psycopg 3 · Pydantic v2** | Igual que `apps/bot` de OpenGravity (sin Telegram). |
-| Migraciones | **Alembic**, único ejecutor en producción (`preDeployCommand = "alembic upgrade head"`). | OpenGravity. **No usamos Prisma.** |
-| Jobs | **APScheduler** dentro del proceso FastAPI (lifespan), envoltorio `_safe_job` con sesión propia y commit/rollback. | Patrón de `jobs-programados-opengravity`, sin PTB. |
-| Tests API | **pytest + pytest-asyncio (strict)** contra **PostgreSQL 16 local** (en el contenedor y en CI como *service*), sesión con savepoint por test. | Fixtures de OpenGravity, adaptadas a Postgres (para que `FOR UPDATE` sea real). |
-| Contrato | **OpenAPI generado por FastAPI**, exportado a `contracts/openapi.json` con `scripts/export_openapi.py`. Esquemas Pydantic definidos en F0 = contrato. Mock: **Prism** sobre ese archivo. | — |
-| Web | **Next.js 16** (App Router, `src/proxy.ts` como middleware, cookie `authToken`), **Tailwind 4**, `lucide-react`, `recharts`, Vitest. **Leer `node_modules/next/dist/docs/` antes de escribir código.** | `apps/web` de OpenGravity. |
-| Android | **Kotlin 2 · Jetpack Compose · Material 3 · Hilt · Retrofit + OkHttp + kotlinx.serialization · DataStore · Coil · FCM**. Un proyecto Gradle: `:core:designsystem`, `:core:network`, `:core:data`, `:app-cliente`, `:app-delivery`. `minSdk 24`. | Nuevo. |
-| Diseño | **Impeccable** (`.claude/skills/impeccable`) → `PRODUCT.md`, `DESIGN.md` y tokens compartidos web/Android. | Skill de OpenGravity. |
-| Hosting | Railway: servicios `api` (rootDirectory `api/`) y `web` (rootDirectory `web/`), entorno `staging`; luego `production`. | Igual que OpenGravity. |
-| BD | Neon `jmcakes` (org personal `org-dawn-bar-06119989`, **nunca** `Finanzas_CAPS`), región aws-us-east-1, PG 17, BD `panaderia`. | — |
-| Archivos | Railway Bucket (S3), URL prefirmada. Adaptador local en dev/test. | Nuevo (OpenGravity usaba Telegram/Drive). |
+| Capa | Elección |
+|---|---|
+| API | Python **3.11** (fijado en `api/.python-version` y CI), FastAPI, SQLAlchemy 2.0 async, **driver único `postgresql+psycopg`** (asyncpg prohibido), Pydantic v2. |
+| Migraciones | Alembic. **`alembic/env.py` usa `DATABASE_URL_DIRECT`** (Neon sin `-pooler`) si existe. Railway: `preDeployCommand = "alembic upgrade head && python -m scripts.bootstrap"`. |
+| Conexión app | `DATABASE_URL` (Neon **-pooler**); si el host contiene `-pooler` → `connect_args={"prepare_threshold": None}` (PgBouncer transaccional). |
+| Proceso | `python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips='*'` · `numReplicas = 1` (scheduler y bus de eventos en memoria). |
+| Jobs | APScheduler `AsyncIOScheduler(timezone="America/Caracas")` en el lifespan; envoltorio `safe_job(name, fn)` (sesión propia, commit/rollback, log). `SCHEDULER_ENABLED=false` en tests, E2E y CI. |
+| Rate limit | slowapi con `key_func` = primer `X-Forwarded-For` (respaldo `client.host`); login limitado por **IP + teléfono**. |
+| Tests API | pytest + pytest-asyncio (strict, loop de sesión) + **Postgres 16 real** (local o servicio de CI), **una base por agente** (`panaderia_test_<id>`), esquema por `alembic upgrade head` (nunca `create_all`). |
+| Contrato | OpenAPI generado por FastAPI → `contracts/openapi.json` (`api/scripts/export_openapi.py`, `--check` en CI). Mock: Prism. |
+| Web | Next.js 16.2.2, React 19.2.4, Tailwind 4, Vitest; Playwright **se ejecuta en GitHub Actions** (el contenedor no puede descargar navegadores). |
+| Android | Kotlin 2 · Compose · Material 3 · Hilt · Retrofit/OkHttp · kotlinx.serialization · DataStore · Coil · FCM. `:core:network` y `:core:data` como **módulos JVM puros** (prueban en local); `:core:designsystem`, `:app-cliente`, `:app-delivery` Android (compilan en GitHub Actions). |
+| Archivos | Subida **a través de la API** (`POST /api/v1/files`, multipart ≤ 5 MB, tipo validado en servidor) → Railway Bucket (S3) o almacenamiento local en dev/test. Lectura por URL GET prefirmada (TTL 1 h). Sin CORS de bucket. |
+| Diseño | Impeccable → `PRODUCT.md`, `DESIGN.md`, `docs/design/tokens.json`. |
 
 ## Estructura del repositorio
-
 ```
 jmcakes/
-├─ PRODUCT.md · DESIGN.md            # Impeccable (producto y sistema visual)
-├─ CLAUDE.md                         # reglas para agentes
-├─ contracts/openapi.json            # generado desde la API (fuente de verdad del contrato)
-├─ api/                              # FastAPI (dueña de TODA la lógica de negocio)
-│  ├─ alembic/ · alembic.ini · railway.toml · requirements.txt · pytest.ini
+├─ PRODUCT.md · DESIGN.md · CLAUDE.md · README.md
+├─ contracts/openapi.json                    # generado
+├─ scripts/dev-setup.sh                      # venv + deps + Postgres local + base del agente
+├─ spec/  (money_model.py, test_money_model.py, requirements.txt)
+├─ api/
+│  ├─ .python-version · requirements.txt · pytest.ini · alembic.ini · alembic/ · railway.toml · nixpacks.toml · .env.example
+│  ├─ scripts/ (export_openapi.py, mock.sh, seed.py, bootstrap.py)
 │  ├─ src/
 │  │  ├─ main.py · config.py
-│  │  ├─ core/        (exceptions, logging, security/jwt, encryption)        ← OpenGravity
-│  │  ├─ db/          (base, session, models_registry, types)               ← OpenGravity
-│  │  ├─ utils/       (date_utils: Caracas, to_utc_naive)                    ← OpenGravity
-│  │  ├─ domain/<x>/  (db_models · schemas · repository · service)           ← patrón OpenGravity
-│  │  │   auth · users · customers · catalog · settings · orders · kitchen · delivery
-│  │  │   payments · payment_methods · wallet · receivables · cash_accounts
-│  │  │   exchange_rates · audit · closures · dashboard · notifications · files
-│  │  ├─ api/v1/      (un router por dominio: SOLO valida y delega al service)
-│  │  ├─ services/    (ledger.py: TODA escritura de dinero; events.py: bus SSE; push.py: FCM)
-│  │  └─ jobs/        (bcv_sync · daily_closing · unpaid_auto_cancel)
+│  │  ├─ core/   (errors.py: catálogo 03 §7 + handlers · schemas.py: ApiModel camelCase · security.py · logging.py)
+│  │  ├─ db/     (base.py · session.py · models_registry.py)
+│  │  ├─ utils/date_utils.py
+│  │  ├─ domain/<x>/ (db_models · schemas · repository · service · interface.py)
+│  │  │    auth users customers catalog files settings orders kitchen delivery
+│  │  │    payments payment_methods wallet receivables cash_accounts finance exchange_rates
+│  │  │    audit closures dashboard
+│  │  ├─ api/v1/<archivo>.py              # ver 08 (columna Archivo)
+│  │  ├─ services/ (interfaces.py · ledger.py · money.py · events.py · push.py)
+│  │  └─ jobs/ (runner.py · bcv_sync.py · unpaid_auto_cancel.py · daily_closing.py)
 │  └─ tests/
-├─ web/                              # Next.js 16
-│  └─ src/app/(admin)/admin/… · src/app/(cocina)/cocina/… · src/app/login · src/components/ui · src/lib
-├─ android/                          # Gradle multi-módulo
-├─ spec/                             # modelo ejecutable de las reglas de dinero (ver 07-pruebas)
-├─ docs/plan · docs/design · docs/handoffs · docs/CUESTIONARIO.md
-└─ .github/workflows/                # api.yml · web.yml · android.yml · contract.yml
+├─ web/ (src/app/(admin) · src/app/(cocina) · src/app/login · src/app/api/auth · src/components/{ui,layout,admin,cocina} · src/lib · e2e/ · public/)
+├─ android/ (core/designsystem · core/network · core/data · app-cliente · app-delivery · gradle wrapper)
+├─ e2e/run_scenarios.py
+├─ docs/ (plan · design · handoffs · CUESTIONARIO.md)
+└─ .github/workflows/ (api.yml · contract.yml · web.yml · android.yml · e2e.yml · release-android.yml · secrets.yml [gitleaks])
 ```
 
-## Convenciones heredadas de OpenGravity (obligatorias)
-
-1. **Capas:** el router valida y delega; el `service` orquesta y hace `commit`/`rollback`; el `repository` hace `flush()`, **nunca** `commit()`.
-2. **Dinero:**
-   - `Numeric(14,2)` con `Decimal` en Python, nunca `float`. Tasa `Numeric(14,4)`.
-   - En JSON el dinero viaja como **string decimal** (`"12.50"`). Android lo lee con `BigDecimal`.
-3. **Toda escritura de dinero pasa por `services/ledger.py`.**
-   - Ningún service toca `walletBalance` ni `balance` directamente.
-   - Bloqueo **`SELECT … FOR UPDATE`** del cliente o cuenta antes de mover saldo.
-   - Cada asiento guarda `balanceAfter`.
-4. **USD/VES:** los montos llegan al ledger en USD. Si el pago registró importe local (`amountLocal` y `bcvRateUsed`), ese manda. Nunca se reconvierte dos veces.
-5. **Fechas:**
-   - Columnas `DateTime` **naive en UTC**; persistir con `to_utc_naive()`.
-   - Lógica de “día” con `get_today_caracas()` / `as_caracas_date()`.
-   - Nunca `.date()` sobre un UTC crudo.
-6. **BD:**
-   - Tablas en `snake_case` minúscula; columnas en **camelCase** (nombre físico como primer argumento de `Column`).
-   - IDs `String` (cuid2).
-   - Los `SQLEnum` llevan `name=` explícito.
-   - Registro único de modelos en `src/db/models_registry.py`, usado por alembic, tests y session.
-7. **Errores:**
-   - `HTTPException(detail="mensaje para el usuario")` en español, o `AppError` con `code`.
-   - El cliente muestra `detail` tal cual.
-   - Formato: `{"detail": "...", "code": "CREDIT_LIMIT_EXCEEDED", "meta": {...}}`.
-8. **Web:**
-   - Cliente delgado: **no calcula** dinero ni estados.
-   - Vistas operativas con `cache: 'no-store'`.
-   - Fechas con `timeZone: "America/Caracas"`.
-   - IDs string; filtros y paginación del lado del servidor.
-9. **Idempotencia:** header `Idempotency-Key` en crear pedido y reportar pago (columna `idempotencyKey` única).
-10. **Cambios quirúrgicos:** `Edit`, no reescrituras, sobre archivos existentes (skill `cambios-quirurgicos`).
+## Convenciones (obligatorias)
+1. **Capas** OpenGravity: router valida y delega; service orquesta y hace commit/rollback; repository `flush()`.
+2. **JSON en camelCase**: todo esquema hereda de `core/schemas.py::ApiModel` (`alias_generator=to_camel, populate_by_name=True, from_attributes=True`). Los campos de respuesta usan el nombre de la columna (02) en camelCase. Regla Spectral `casing: camel` en CI.
+3. **Dinero**: `Decimal`/`Numeric(14,2)`; JSON string decimal; Android `BigDecimal`. Escritura de saldos solo en `services/ledger.py` con `FOR UPDATE` y `balanceAfter`. Bs mostrados calculados en servidor (03 §0).
+4. **Fechas**: UTC naive en BD (`to_utc_naive`); día de negocio Caracas (`get_today_caracas`, `as_caracas_date`, `start_of_day_caracas`, `end_of_day_caracas`); en JSON ISO-8601 con `Z`.
+5. **BD**: tablas snake_case, columnas camelCase, IDs cuid2, enums con `name=`, registro único `models_registry.py`, restricciones nombradas.
+6. **Errores**: `AppError(code)` → `{detail, code, meta}`; `IntegrityError` → 409 con `code` según la restricción; `OperationalError` → 503; 422 de validación en español. Nada en inglés hacia el usuario.
+7. **Idempotencia**: `Idempotency-Key` obligatorio en `POST /orders`, `POST /admin/orders`, `POST /payments`, `POST /admin/customers/{id}/manual-payment`; único por cliente + `requestHash`.
+8. **Web**: cliente delgado (no calcula dinero ni estados), `cache: 'no-store'` en vistas operativas, `timeZone: "America/Caracas"`, filtros/paginación del servidor.
+9. **Repositorio público**: nada de secretos, datos de clientes, ni comentarios/pruebas que citen incidentes, montos o nombres de producción de OpenGravity (ver 06 §Reglas). `gitleaks` en CI.
 
 ## Autenticación
+- `users.role` ∈ {ADMIN, PRODUCTION, DELIVERY, CUSTOMER}; login por teléfono + contraseña (bcrypt).
+- Access JWT HS256 **30 min** (`sub`, `role`, `cid`) · refresh rotativo 30 días (hash en `refresh_tokens`).
+- **Web** (corrige el patrón de OpenGravity, que no tenía refresh):
+  - Server Action de login guarda **`authToken` y `refreshToken`** en cookies httpOnly, SameSite=Lax, path `/`.
+  - `src/app/api/auth/refresh/route.ts` llama `POST /api/v1/auth/refresh` y rota ambas cookies.
+  - `src/proxy.ts`: si el access venció y hay `refreshToken` → redirige a `/api/auth/refresh?next=…`; verifica rol por ruta (`/admin/**` ADMIN; `/cocina/**` PRODUCTION|ADMIN). Sin `console.log`.
+  - `src/app/api/auth/token/route.ts` (solo mismo origen) entrega al JS un access **fresco** (refresca si quedan < 5 min) para llamadas `Bearer` a la API y para pedir token de SSE. No se copia `set-token` de OpenGravity.
+  - `client-api`: ante 401 llama `/api/auth/refresh` una vez y reintenta; si falla → `/login`.
+- **Android**: Bearer + interceptor de refresh (OkHttp `Authenticator`).
+- **Modo mock** (Prism): los `example` de `accessToken` son JWT HS256 reales firmados con `JWT_SECRET=dev-mock-secret-no-usar-en-prod`, `role=ADMIN`, `exp` 2099, para que el proxy deje pasar en W1/W2.
 
-- `users` con `role` ∈ {ADMIN, PRODUCTION, DELIVERY, CUSTOMER}. Login por **teléfono** (E.164 `+58…`) + contraseña (bcrypt, como OpenGravity).
-- Access JWT HS256 de 30 min, con `sub`, `role` y `cid` (customerId). Refresh rotativo de 30 días, guardado hasheado.
-- **Web:**
-  - La Server Action de login guarda la cookie `authToken` (httpOnly).
-  - `src/proxy.ts` la verifica con `jose`. Las rutas `/admin/*` requieren ADMIN y `/cocina` requiere PRODUCTION o ADMIN.
-  - Las peticiones del navegador a la API llevan `Authorization: Bearer`, con el token obtenido vía `/api/auth/me` como en OpenGravity.
-- **Android:** Bearer más refresh automático en un interceptor de OkHttp.
-- **SSE:**
-  - El navegador no manda headers con `EventSource`, así que primero pide un token de stream de corta vida (`POST /api/v1/events/token`, 60 s, un solo uso).
-  - Luego abre `GET /api/v1/events?token=…`. Heartbeat cada 20 s y `Last-Event-ID` para reanudar.
+## Tiempo real (SSE)
+- `POST /api/v1/events/token` (Bearer, K/A) → token de 60 s y un solo uso.
+- `GET /api/v1/events?token=…&lastEventId=<n>` (también acepta cabecera `Last-Event-ID`); cabeceras `Cache-Control: no-cache`, `X-Accel-Buffering: no`, sin compresión; heartbeat 20 s; buffer de 200 eventos; si no puede reanudar emite `event: reset`.
+- Cliente (`useEventStream`): en `onerror` → `close()`, backoff 1/2/5/10 s, token nuevo, reabre con `lastEventId`; en `reset` recarga todo.
+- Sobre de evento `{id, type, at, data}` (08 §Eventos). Publicación **después del commit**.
 
-## Tiempo real y push
+## Variables de entorno (FND copia a `api/.env.example`, DSN a `web/.env.example`)
+| Servicio | Variable | Notas |
+|---|---|---|
+| api | `DATABASE_URL` | Neon pooler (`postgresql+psycopg://…-pooler…`) |
+| api | `DATABASE_URL_DIRECT` | Neon directo, para Alembic |
+| api | `JWT_SECRET` | aleatorio; compartido con web |
+| api | `ENVIRONMENT` | `development`/`staging`/`production` |
+| api | `CORS_ORIGINS` | dominio de web |
+| api | `STORAGE_BACKEND` | `s3` o `local` |
+| api | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Railway Bucket |
+| api | `FCM_CREDENTIALS_JSON` | opcional; vacío = push solo a log |
+| api | `SCHEDULER_ENABLED` | `true` en Railway |
+| api | `BOOTSTRAP_ADMIN_PHONE`, `BOOTSTRAP_ADMIN_PASSWORD` | crea el primer admin si no hay ninguno |
+| api | `SEED_DEMO` | `1` = carga datos de demostración (solo staging) |
+| api | `TEST_DATABASE_URL` | solo tests |
+| web | `NEXT_PUBLIC_API_URL` | `https://<api>/api/v1` (se incrusta en build) |
+| web | `JWT_SECRET` | `${{api.JWT_SECRET}}` (variable de referencia de Railway) |
 
-- **Bus de eventos:**
-  - En memoria por proceso (Railway con 1 réplica) detrás de la interfaz `EventBus`.
-  - Si se escala, se cambia a Postgres `LISTEN/NOTIFY` sin tocar a los consumidores.
-  - Los eventos se emiten **después del commit**: `session.info["after_commit"]`.
-- **Push FCM:**
-  - Adaptador `PushSender`. Sin credenciales (`FCM_CREDENTIALS_JSON` vacío) solo registra en el log, sin fallar.
-  - Tokens inválidos se borran.
+## Despliegue (Railway)
+- Servicios `api` (rootDirectory `api`) y `web` (rootDirectory `web`). **El archivo de config no sigue al rootDirectory**: fijar `railwayConfigFile=/api/railway.toml` y `/web/railway.toml` y verificarlo con `get-service-config`.
+- Orden: crear servicios → `generate-domain` de ambos → variables → bucket → conectar repo (rama de integración) → aprobar despliegue (**el dueño**, ver CUESTIONARIO §Requiere al dueño).
+- Responsable: el **orquestador** (no un agente en worktree).
 
 ## Entornos
+| Entorno | BD | Despliegue |
+|---|---|---|
+| Local / agentes | Postgres 16 local, `panaderia_test_<id>` | — |
+| CI | servicio `postgres:16` | cada push a la rama de integración |
+| staging | Neon rama `staging` | Railway, auto desde la rama de integración |
+| production | Neon rama `main` | tras aprobación del dueño |
 
-| Entorno | API | Web | BD | Despliegue |
-|---|---|---|---|---|
-| Local / tests | uvicorn :8000 | next dev :3000 | Postgres 16 local | — |
-| CI (GitHub Actions) | pytest con Postgres como servicio | build + lint + vitest | servicio `postgres:16` | en cada push a la rama de integración |
-| **staging** | Railway `api` | Railway `web` | Neon rama `staging` | auto desde la rama de integración |
-| production | Railway | Railway | Neon rama `main` | tras la aprobación del dueño |
-
-**Restricciones de red del entorno de agentes (verificadas el 2026-10-06):**
-- **Neon (puerto 5432):** no hay salida. Se maneja por el MCP de Neon, y las migraciones las aplica el `preDeployCommand` de Railway.
-- **`dl.google.com`:** bloqueado, así que no se puede instalar el Android SDK en el contenedor. Android se compila en GitHub Actions.
-- **Sí accesibles:** `maven.google.com`, Maven Central, Gradle plugins, npm y PyPI.
+**Restricciones verificadas (2026-10-06)**: sin salida a Neon:5432 (uso por MCP; migraciones por Railway); `dl.google.com` y descargas de navegadores de Playwright bloqueados (Android y Playwright en GitHub Actions); accesibles npm, PyPI, Maven Central, `maven.google.com`, plugins de Gradle.

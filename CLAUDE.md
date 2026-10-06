@@ -36,13 +36,16 @@ Reutiliza **OpenGravity** (`/home/user/opengraviti` en el entorno de agentes). A
     - Toda prueba de dinero verifica saldos **y** asientos (`assert_money_invariants`).
 12. **Cambios quirúrgicos:** en archivos existentes usa `Edit` puntual, no reescrituras completas.
 13. **Acciones destructivas** en Neon, Railway o producción: confirmar con el humano.
-    - Neon: proyecto `jmcakes` (`square-poetry-91370020`) de la org personal. **Nunca** `Finanzas_CAPS`.
+    - Neon: solo el proyecto `jmcakes` (`square-poetry-91370020`). Nunca otro proyecto u organización.
+14. **Agentes del enjambre:** no hacen push ni PR, no editan `docs/plan/STATUS.md` y usan su propia base de pruebas y sus puertos (`docs/plan/05-protocolo-agentes.md` §1). Integra el orquestador.
+15. **Código copiado de OpenGravity**, que es privado (este repo es público): sanearlo antes de copiar. Sin comentarios de incidentes ni nombres de producción (`docs/plan/06` §Reglas).
 
 ## Comandos
 > FND completa esta sección con los comandos reales.
 
 ```bash
-python -m pytest spec -q          # modelo ejecutable de las reglas de dinero
+pip install -r spec/requirements.txt && python -m pytest spec -q   # modelo ejecutable de las reglas de dinero
+# FND agregará: scripts/dev-setup.sh (venv + Postgres local + base del agente), pytest de api, export_openapi, mock
 ```
 
 ## Entorno de la nube (verificado el 2026-10-06)
@@ -50,6 +53,6 @@ python -m pytest spec -q          # modelo ejecutable de las reglas de dinero
   - Python 3.11, Node 22, Java 21 y Gradle disponibles.
   - **Sin Android SDK ni KVM** (`dl.google.com` bloqueado): Android se compila en GitHub Actions.
 - **Base de datos:**
-  - PostgreSQL 16 local: `service postgresql start`, luego `su postgres -c psql`.
+  - PostgreSQL 16 local: `service postgresql start`; rol `dev`/`dev`; una base por agente (`panaderia_test_<id>`).
   - **Sin salida a Neon:5432**: usa el MCP de Neon; las migraciones en Neon las aplica Railway (`preDeployCommand`).
-- **Red:** npm, PyPI, Maven Central, `maven.google.com` y el portal de plugins de Gradle están accesibles.
+- **Red:** npm, PyPI, Maven Central, `maven.google.com` y el portal de plugins de Gradle están accesibles. **Playwright no puede descargar navegadores**: sus pruebas se escriben en local y corren en GitHub Actions.

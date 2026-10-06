@@ -1,68 +1,64 @@
 # DSN — Sistema de diseño (Impeccable) y base web
 
-**Fase 0** (en paralelo con FND) · **Rama** `block/DSN` · **Skill obligatoria:** `impeccable` (en `.claude/skills/impeccable`)
+**Fase 0** (en paralelo con FND) · rama `block/DSN` · puertos `WEB_PORT=3000`, `MOCK_PORT=4010` · skill obligatoria: **impeccable**
 
 ## Objetivo
-Definir el **mundo visual** de la panadería y dejarlo en código para web, y en especificación lista para Android, de modo que W1, W2 y M solo compongan pantallas.
+Definir el mundo visual de la panadería y dejarlo listo en código (web) y en especificación (Android), para que W1, W2 y M solo compongan pantallas.
 
 ## Alcance
 1. **Impeccable**
-   - Ejecutar `sh .claude/skills/impeccable/scripts/impeccable context`. `PRODUCT.md` ya existe y fue confirmado por el dueño: **no rehacer** el init.
-   - Seguir `reference/new-work.md` para crear **`DESIGN.md`**: dirección visual, paleta con roles (claro y oscuro), tipografía, escala de espaciado, radios, elevación, movimiento, iconografía y voz de los textos.
-   - Una dirección **propia de panadería venezolana**, cálida y apetitosa pero operativa. No una plantilla genérica de SaaS.
-   - Respetar `PRODUCT.md`: nombre configurable, sin logo fijo, contraste AA, legible a 2 m en cocina.
-   - Usar código primero: la generación de imágenes no está garantizada en este entorno.
-2. **Tokens compartidos**
-   - `docs/design/tokens.json` es la fuente: color por rol, tipo, espaciado, radios y movimiento.
-   - Derivados:
-     - `web/src/app/globals.css`: variables CSS y `@theme` de Tailwind 4, con modo oscuro;
-     - `docs/design/android-theme.md`: valores para `ColorScheme`, `Typography` y `Shapes` de Material 3, más los fragmentos `Color.kt`, `Type.kt` y `Theme.kt` listos para copiar.
-3. **Especificación por superficie** en `docs/design/`:
-   - `admin.md` (panel), `cocina.md` (tablet/TV, 2 m) y `cliente-android.md` y `delivery-android.md` (Material 3 según `reference/android.md`).
-   - Cada una con: mapa de navegación, lista de pantallas, para cada pantalla un esquema de layout (ASCII), componentes, estados (vacío, cargando, error, sin conexión) y textos exactos en español.
-   - Pantallas clave a especificar con detalle:
-     - checkout CASH: billetera usada, faltante en USD y Bs, datos de pago, formulario de referencia y comprobante;
-     - selector “Lo quiero hoy / Programar fecha y hora”;
+   - `sh .claude/skills/impeccable/scripts/impeccable context`. `PRODUCT.md` ya está confirmado por el dueño: **no rehacer init**.
+   - Seguir `reference/new-work.md` hasta escribir **`DESIGN.md`**: dirección, paleta por roles en claro y oscuro, tipografía, espaciado, radios, elevación, movimiento, iconografía y voz.
+   - Dirección **propia de panadería venezolana**: cálida y apetitosa, pero operativa. No una plantilla SaaS.
+   - Requisitos: contraste AA, cocina legible a 2 m, nombre del negocio configurable.
+   - Ruta **code-first**: no hay generación de imágenes garantizada. Si la skill pide decisiones al usuario y no hay forma de preguntarle, documentar las inferencias como “supuestos” en `DESIGN.md`.
+2. **Tokens:**
+   - `docs/design/tokens.json` es la fuente.
+   - `web/src/app/globals.css`: variables CSS + `@theme` de Tailwind 4, con oscuro.
+   - `docs/design/android-theme.md`: `ColorScheme`, `Typography` y `Shapes` de Material 3, más fragmentos `Color.kt`, `Type.kt` y `Theme.kt`.
+3. **Especificaciones por superficie** en `docs/design/`: `admin.md`, `cocina.md`, `cliente-android.md` y `delivery-android.md`.
+   - Cada una con navegación, pantallas (layout ASCII), componentes, estados (vacío, cargando, error, sin conexión) y **textos exactos**.
+   - En detalle:
+     - checkout CASH: billetera usada, faltante USD/Bs, datos de pago con botón copiar, referencia y comprobante, y la hora límite;
+     - selector “Lo quiero hoy / Programar”;
      - tablero de cocina con “Programados” y la fecha en grande;
-     - bandeja de verificación de pagos con el comprobante a la vista.
-4. **Base web** (copiando OpenGravity `apps/web`, ver [06](../06-reutilizacion-opengravity.md)):
-   - Configuración y dependencias:
-     - Next 16.2.2, React 19.2.4 y Tailwind 4, con las mismas versiones que OpenGravity;
-     - `AGENTS.md` con la advertencia de Next 16;
-     - ESLint, Vitest y Playwright configurado (`web/e2e/`).
-   - Auth y datos:
-     - `src/proxy.ts` con roles: `/admin/**` exige ADMIN y `/cocina/**` exige PRODUCTION o ADMIN;
-     - login por teléfono (`src/app/login`) y Server Actions;
-     - `src/lib/api.ts` y `client-api.ts`, que preservan `detail` y `code`;
-     - `src/lib/format.ts`: `fmtUsd`, `fmtBs`, `fmtDate`, `fmtTime` y `fmtDateBig`, todos con zona Caracas;
-     - `src/lib/useEventStream.ts`: SSE con token de stream, reconexión y `Last-Event-ID`;
-     - tipos TypeScript generados desde `contracts/openapi.json` (`openapi-typescript`), con el script `npm run gen:api`;
-     - si el contrato aún no existe al empezar, el script queda listo y se ejecuta al integrar.
-   - **UI kit** en `src/components/ui/`:
-     - componentes de OpenGravity re-vestidos con los tokens: Button, Card, Badge, DataTable (paginación del servidor), Modal, Input, Select, Switch, Textarea, Timeline y MetricCard;
-     - componentes nuevos: `MoneyText` (USD con Bs debajo), `StatusPill` (estado con texto, no solo color), `EmptyState`, `Skeleton`, `ConnectionBanner`, `ImageUpload` y `ConfirmDialog`.
-   - Layouts:
-     - `src/app/(admin)/layout.tsx` con Sidebar y topbar con nombre del negocio de `/settings/public`;
-     - `src/app/(cocina)/layout.tsx` a pantalla completa, con Wake Lock y botón “Activar sonido”;
-     - páginas índice placeholder con `EmptyState`.
-   - Página `/design` (solo en desarrollo) que muestra tokens y componentes: el catálogo vivo.
-5. **CI:** `.github/workflows/web.yml` con `npm ci`, `lint`, `test` y `build`.
-6. **Detector:** al terminar, `impeccable detect --json` sobre `web/src` sin hallazgos críticos, y el resultado en el handoff.
+     - bandeja de pagos con el comprobante a la vista.
+4. **Base web** (copiando OpenGravity según 06):
+   - **Proyecto:**
+     - Next 16.2.2, React 19.2.4 y Tailwind 4. Leer `node_modules/next/dist/docs/` antes de escribir.
+     - **Todas las dependencias** que W1 y W2 necesitarán: recharts, openapi-typescript, @playwright/test, testing-library, clsx y lucide-react. W1 y W2 **no** tocarán `package.json`.
+   - **Auth con refresh** (01 §Autenticación):
+     - Server Action de login que guarda las cookies httpOnly `authToken` y `refreshToken`;
+     - `src/app/api/auth/refresh/route.ts`, `src/app/api/auth/token/route.ts` y logout;
+     - `src/proxy.ts` con roles por ruta y redirección a refresh, sin `console.log`;
+     - **no** copiar `set-token`.
+   - **`src/lib/`:**
+     - `api.ts` y `client-api.ts`: base `NEXT_PUBLIC_API_URL`, conservan `detail` y `code`, reintentan una vez tras un 401 vía refresh;
+     - `format.ts` (Caracas): `fmtUsd`, `fmtBs`, `fmtDate`, `fmtTime` y `fmtDateBig`;
+     - `useEventStream.ts`: token fresco por `/api/auth/token` → `POST /events/token`, reconexión con backoff y `lastEventId`, y manejo del evento `reset`;
+     - script `npm run gen:api` (openapi-typescript → `src/lib/api-types.ts`), que ejecutará el orquestador.
+   - **UI kit** `src/components/ui/`:
+     - componentes de OpenGravity re-vestidos con los tokens; `DataTable` agrega `cursor` y `onLoadMore`;
+     - nuevos: `MoneyText` (USD con los Bs **de la API** debajo), `StatusPill` (con texto), `EmptyState`, `Skeleton`, `ConnectionBanner`, `FileUpload` (multipart a `/files`) y `ConfirmDialog`.
+   - **Layouts:**
+     - `(admin)/layout.tsx` con `components/layout/Sidebar.tsx` (que pasa a ser de W1) y topbar con el nombre del negocio desde `/settings/public`;
+     - `(cocina)/layout.tsx` a pantalla completa, con Wake Lock y “Activar sonido”;
+     - páginas placeholder.
+   - **Recursos:** `web/public/sounds/{nuevo-pedido,pago-reportado}.mp3` (sonidos cortos generados, de licencia libre), íconos, `web/public/cocina/manifest.webmanifest`.
+   - **Página `/design`** (solo en desarrollo) con tokens y componentes.
+   - **Playwright:** `playwright.config.ts` lee `WEB_PORT`/`MOCK_PORT` y arranca Prism y `next dev`. Spec de capturas de `/design` en escritorio y móvil, claro y oscuro.
+   - `web/.env.example`: `NEXT_PUBLIC_API_URL` y `JWT_SECRET` (en modo mock, `dev-mock-secret-no-usar-en-prod`).
+5. **CI:** `.github/workflows/web.yml` con `npm ci`, lint, test y build, más un job `e2e-web` (`npx playwright install --with-deps chromium`, contra Prism) que sube capturas y reporte como artifacts.
+6. `impeccable detect --json web/src` sin críticos; la salida va en el handoff.
 
 ## No tocar
 `api/`, `android/`, `contracts/`.
 
 ## Limitantes
-- No hay emulador Android: la parte Android es especificación más fragmentos Kotlin; M los integra.
-- Leer `node_modules/next/dist/docs/` antes de escribir código Next 16.
-- Las versiones de las dependencias se fijan a las de OpenGravity.
-
-## Oportunidades
-- Ya existe un panel probado (OpenGravity). Basta con re-vestirlo, sin reinventar las interacciones.
-- Las capturas de `/design` con Playwright sirven al dueño para aprobar la dirección visual.
+- **Playwright no corre en el contenedor**: no puede descargar navegadores. Las pruebas se escriben en local y se ejecutan en CI.
+- El contrato aún no existe mientras trabaja: los tipos los genera el orquestador en G1.
 
 ## Compuerta G1 (parte DSN)
-- [ ] `DESIGN.md`, `docs/design/tokens.json`, `android-theme.md` y las 4 especificaciones de superficie.
-- [ ] `npm ci && npm run lint && npm test && npm run build` verdes en `web/`.
-- [ ] Capturas de `/design` (escritorio y móvil, claro y oscuro) en `docs/handoffs/assets/DSN-*.png`.
-- [ ] Salida de `impeccable detect` en el handoff.
+- `DESIGN.md`, `tokens.json`, `android-theme.md` y las 4 especificaciones.
+- `npm ci && npm run lint && npm test && npm run build && npx playwright test --list` en verde (salida en el handoff).
+- `impeccable detect` sin críticos.

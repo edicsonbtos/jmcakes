@@ -1,61 +1,61 @@
 # W1 — Web: panel del administrador
 
-**Fase 1** · **Rama** `block/W1` · Diseño: `DESIGN.md` y `docs/design/admin.md` · Skill: `impeccable` · Reutiliza las vistas de OpenGravity ([06](../06-reutilizacion-opengravity.md))
+**Fase 1** · rama `block/W1` · `WEB_PORT=3001`, `MOCK_PORT=4011` · diseño `DESIGN.md` + `docs/design/admin.md` · skill **impeccable** · reutiliza las vistas de OpenGravity según [06](../06-reutilizacion-opengravity.md)
 
 ## Objetivo
-El dueño controla todo desde el navegador del teléfono o la computadora. Lo más urgente, **aprobar pagos**, está a un toque desde cualquier pantalla.
+El dueño controla todo desde el teléfono o la computadora. Aprobar pagos está a un toque desde cualquier pantalla.
 
 ## Pantallas (`/admin/...`)
-1. **Inicio:** métricas del día (03 §6) con selector de fecha; pedidos por estado en vivo (SSE); pagos por verificar, que lleva a la bandeja; top productos y deudores; alerta “sin motorizado configurado” si aplica.
-2. **Pagos** (adaptado de OpenGravity `payments`):
-   - Bandeja por estado, con el **comprobante a la vista**: imagen ampliable, referencia, monto en Bs y USD, tasa, titular y pedido asociado.
-   - Acciones: **Tomar · Aprobar** (con corrección de monto o tasa) · **Rechazar** (con motivo) · **Revertir**.
-   - Sonido y contador en vivo con `payment.reported`.
+1. **Inicio:**
+   - métricas del día (03 §6) con selector de fecha;
+   - pedidos por estado en vivo (SSE `order.*`);
+   - pagos por verificar;
+   - top productos y deudores;
+   - alerta de READY sin motorizado.
+2. **Pagos:**
+   - Bandeja con cursor por estado.
+   - **Comprobante a la vista:** imagen ampliable o PDF, referencia, monto en Bs y USD, tasa, titular, pedido y cliente.
+   - Acciones: Tomar · Aprobar (corregir monto o tasa) · Rechazar (con motivo) · Revertir (con motivo).
+   - Contador global en el Sidebar con `GET /admin/payments/pending-count` + SSE `payment.*` + sonido.
 3. **Pedidos:**
-   - Tabla con filtros del servidor: estado, fecha de entrega, cliente y canal.
-   - Detalle con líneas, bitácora, pagos y CxC.
-   - Acciones: cancelar (con motivo), reducir, forzar transición y **crear pedido para un cliente** (pedidos por WhatsApp).
-   - Vista tablero opcional.
+   - Tabla con filtros del servidor; detalle con bitácora, pagos y CxC.
+   - Acciones: cancelar, reducir, forzar transición y reasignar motorizado.
+   - **Crear pedido para un cliente:** `POST /admin/orders/quote` y luego `POST /admin/orders`, con `Idempotency-Key` generado una vez por intento.
 4. **Clientes:**
    - Listado con billetera, deuda, modo y estado.
-   - Ficha con pestañas:
-     - Datos;
-     - **Crédito**: modo, límite y días;
-     - Estado de cuenta: movimientos y CxC, exportable;
-     - Pedidos;
-     - Pagos.
-   - Acciones: abono manual, cargo (fiado), ajuste con nota y bloquear.
+   - Ficha con pestañas: Datos · Crédito · Estado de cuenta (exportable) · Pedidos · Pagos.
+   - Acciones: abono manual (con pedido opcional), cargo, ajuste, **devolver saldo**, anular o condonar CxC, bloquear (cancela sus pedidos pendientes; pedir confirmación).
    - Crear cliente sin app.
-5. **Cobranza:** CxC con antigüedad, vencidas y exportación CSV.
-6. **Catálogo:**
-   - Categorías y productos, con foto (subida directa), publicar, agotado hoy y mínimo.
-   - **Cambio masivo de precios** con vista previa (tabla antes y después) y confirmación.
-   - Historial de precios.
-7. **Cuentas y tasa:** cuentas del negocio con transacciones; tasa del día (BCV o MANUAL) con “fijar tasa manual” y “sincronizar”.
-8. **Cierres:** listado, detalle, PDF y “ejecutar cierre” (de OpenGravity).
+5. **Cobranza:** CxC con antigüedad, vencidas y CSV.
+6. **Catálogo:** categorías y productos con foto (`FileUpload` → `/files`), publicar, agotado y mínimo; **cambio masivo** con vista previa y aplicar; historial.
+7. **Cuentas y tasa:** cuentas del negocio con transacciones (sin bóvedas ni transferencias); tasa del día con fijar manual y sincronizar.
+8. **Cierres:** listado, detalle, PDF y ejecutar.
 9. **Configuración:**
-   - negocio (nombre, contacto), horario, anticipación mínima y días máximos para programar;
-   - costo de envío y motorizado asignado;
-   - reglas de crédito y tolerancia;
-   - métodos de pago y cuentas bancarias;
+   - negocio, horario, anticipación, días máximos y ventana de pago;
+   - envío y motorizado;
+   - crédito y tolerancia;
+   - versiones mínimas de las apps;
+   - **métodos de pago y cuentas bancarias**: componentes `components/settings/*` de OpenGravity adaptados, con `cashAccountId`;
    - usuarios internos.
-10. **Auditoría:** listado filtrable.
+10. **Auditoría.**
 
 ## Reglas
-- Cliente delgado: **no calcula** dinero ni estados; muestra lo que dice la API, con `detail` tal cual.
-- `cache: 'no-store'` en vistas operativas; fechas en Caracas; filtros y paginación del servidor.
-- Confirmación en toda acción de dinero. Botones de acción con estado de carga y **una sola ejecución** (deshabilitar mientras corre).
-- Responsive: la bandeja de pagos y el inicio, impecables en el teléfono.
-- Componer con el UI kit de DSN. Componentes nuevos de admin en `src/components/admin/`.
+- Cliente delgado: los montos, incluidos los Bs, son los que manda la API. `detail` y `code` se muestran tal cual.
+- `cache: 'no-store'`, fechas en Caracas, cursor del servidor.
+- Las vistas copiadas de OpenGravity pasan a **camelCase** y a cursor (“Cargar más”).
+- Confirmación en toda acción de dinero. Botones con estado de carga y una sola ejecución.
+- Responsive: inicio y pagos impecables en el teléfono.
+- **No** tocar `package.json` ni editar archivos existentes de `src/lib`. Los helpers van en `src/components/admin/lib/`. **Sí** es dueño de `src/components/layout/**`.
+- Tipos desde `src/lib/api-types.ts` (generado por el orquestador; no regenerar).
 
 ## Contra qué construir
-Mientras B1–B3 no estén integrados, se usa **mock** (`scripts/mock.sh`, Prism en :4010, `NEXT_PUBLIC_API_URL=http://127.0.0.1:4010/api/v1`). Q1 cambia a la API real.
+Mock con `MOCK_PORT=4011 api/scripts/mock.sh` y `NEXT_PUBLIC_API_URL=http://127.0.0.1:4011/api/v1`. En modo mock, `JWT_SECRET=dev-mock-secret-no-usar-en-prod`. Q1 conecta con la API real.
 
 ## Pruebas exigidas
-- Vitest de componentes clave: bandeja de pagos y formulario de cambio masivo.
-- Playwright contra el mock: login de admin, aprobar un pago (flujo de UI), cambio masivo (vista previa → aplicar) y crédito de un cliente.
-- Capturas de escritorio y móvil de cada pantalla en `docs/handoffs/assets/W1-*.png`.
+- Vitest: bandeja de pagos (estados, acciones y errores de la API) y formulario de cambio masivo.
+- **Playwright** (lo corre el CI): login de admin; aprobar un pago; vista previa y aplicar cambio masivo; habilitar crédito. Capturas de escritorio y móvil de cada pantalla.
+- Local: `npm run lint && npm test && npm run build && npx playwright test --list`.
 - `impeccable detect` sin críticos.
 
 ## No tocar
-`src/app/(cocina)`, `src/components/ui` (solo aditivo y declarado), `src/lib` (solo aditivo y declarado), `api/`, `android/`.
+`src/app/(cocina)`, `src/components/{ui,cocina}`, archivos existentes de `src/lib`, `package.json`, `api/`, `android/`.

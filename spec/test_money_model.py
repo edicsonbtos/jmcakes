@@ -8,7 +8,10 @@ from decimal import Decimal as D
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from money_model import OS, PS, RS, DomainError, Shop
+import ast
+import pathlib
+
+from money_model import ERROR_CODES, OS, PS, RS, DomainError, Shop
 
 DAY = 24 * 60
 
@@ -217,16 +220,161 @@ def test_manual_charge_paid_from_wallet(shop):
     shop.check_invariants()
 
 
+# ---------------- v2.1: hallazgos de la auditoría 1 ----------------
+def test_m2_reduce_awaiting_order_refund_is_collected_minus_new_total(shop):
+    c = cash_customer_with_wallet(shop, "16.00")
+    a = shop.create_order(c.id, "8.00", "a")          # pagado completo
+    shop.adjust(c.id, "0.00" if False else "1.00")    # saldo 9
+    b = shop.create_order(c.id, "10.00", "b")         # usa 9, falta 1
+    a2 = shop.create_order(c.id, "20.00", "a2")       # sin saldo: espera 20
+    shop.reduce_order(b.id, "9.00")                   # cobrado 9 = nuevo total → confirma, no devuelve nada
+    assert b.status == OS.CONFIRMED and b.paid_from_wallet == D("9.00")
+    assert a2.paid_from_wallet == D("0.00") and a.status == OS.CONFIRMED
+    shop.check_invariants()
+
+
+def test_m2_credit_reduction_can_void_receivable_at_zero(shop):
+    c = cash_customer_with_wallet(shop, "10.00")
+    shop.enable_credit(c.id, "100.00")
+    o = shop.create_order(c.id, "30.00", "a")         # 10 billetera + 20 CxC
+    shop.reduce_order(o.id, "8.00")                   # devuelve 2, CxC a 0 → VOID
+    r = shop.receivables[o.receivable_id]
+    assert r.status == RS.VOID and r.void_reason == "REDUCED"
+    assert c.wallet == D("2.00") and o.payment_status == "PAID"
+    shop.check_invariants()
+
+
+def test_m4_cash_customer_with_reversal_debt_cannot_order(shop):
+    c = shop.register()
+    p = shop.report_payment(c.id, "100.00", reference="X")
+    shop.approve(p.id)
+    shop.create_order(c.id, "100.00", "a")
+    shop.reverse(p.id)
+    with pytest.raises(DomainError) as e:
+        shop.create_order(c.id, "50.00", "b")
+    assert e.value.code == "OPEN_DEBT"
+    shop.approve(shop.report_payment(c.id, "100.00", reference="Y").id)   # paga la deuda
+    assert shop.open_debt(c.id) == D("0.00")
+    shop.create_order(c.id, "1.00", "c")
+    shop.check_invariants()
+
+
+def test_m4_overdue_debt_blocks_any_mode(shop):
+    c = shop.register()
+    shop.enable_credit(c.id, "50.00")
+    shop.create_order(c.id, "10.00", "a")
+    shop.set_cash(c.id)
+    shop.now += 20 * DAY
+    with pytest.raises(DomainError) as e:
+        shop.create_order(c.id, "1.00", "b")
+    assert e.value.code == "OVERDUE_DEBT"
+
+
+def test_m5_scheduled_soon_keeps_minimum_pay_window(shop):
+    c = shop.register()
+    o = shop.create_order(c.id, "10.00", "a", due_at=shop.now + 60)   # programado justo al mínimo
+    shop.now += 20
+    assert shop.run_unpaid_auto_cancel() == [] and o.status == OS.AWAITING_PAYMENT
+    shop.now += 15
+    assert shop.run_unpaid_auto_cancel() == [o.id]
+
+
+def test_m5_rejection_after_expiry_reopens_window(shop):
+    c = shop.register()
+    o = shop.create_order(c.id, "10.00", "a")
+    p = shop.report_payment(c.id, "10.00", reference="R", order_id=o.id)
+    shop.now += 2 * DAY                                # vencido, pero con pago en revisión
+    assert shop.run_unpaid_auto_cancel() == []
+    shop.reject(p.id)
+    assert shop.run_unpaid_auto_cancel() == []         # tiene ventana mínima para otro pago
+    shop.report_payment(c.id, "10.00", reference="R2", order_id=o.id)
+    shop.check_invariants()
+
+
+def test_m6_void_only_manual_and_forgive_order_debt(shop):
+    c = shop.register()
+    shop.enable_credit(c.id, "100.00")
+    o = shop.create_order(c.id, "30.00", "a")
+    shop.approve(shop.report_payment(c.id, "10.00", reference="T").id)
+    with pytest.raises(DomainError) as e:
+        shop.void_receivable(o.receivable_id)
+    assert e.value.code == "RECEIVABLE_NOT_VOIDABLE"
+    shop.forgive_receivable(o.receivable_id)
+    r = shop.receivables[o.receivable_id]
+    assert r.status == RS.PAID and r.forgiven == D("20.00") and o.payment_status == "PAID"
+    with pytest.raises(DomainError):
+        shop.reduce_order(o.id, "5.00")
+    m = shop.manual_charge(c.id, "5.00")
+    shop.void_receivable(m.id)
+    assert shop.receivables[m.id].status == RS.VOID
+    shop.check_invariants()
+
+
+def test_m7_payout_returns_wallet_money(shop):
+    c = cash_customer_with_wallet(shop, "12.00")
+    with pytest.raises(DomainError):
+        shop.payout(c.id, "12.01")
+    shop.payout(c.id, "12.00")
+    assert c.wallet == D("0.00") and c.movements[-1].type == "WALLET_PAYOUT"
+    shop.check_invariants()
+
+
+def test_m8_reversed_reference_stays_locked(shop):
+    c = shop.register()
+    p = shop.report_payment(c.id, "10.00", reference="FAKE")
+    shop.approve(p.id)
+    shop.reverse(p.id)
+    with pytest.raises(DomainError) as e:
+        shop.report_payment(c.id, "10.00", reference="FAKE")
+    assert e.value.code == "DUPLICATE_REFERENCE"
+
+
+def test_m9_blocking_cancels_awaiting_and_settle_never_confirms(shop):
+    c = cash_customer_with_wallet(shop, "4.00")
+    o = shop.create_order(c.id, "10.00", "a")
+    p = shop.report_payment(c.id, "6.00", reference="P", order_id=o.id)
+    shop.block(c.id)
+    assert o.status == OS.CANCELLED and c.wallet == D("4.00")
+    shop.approve(p.id)                                 # el pago en revisión sigue su curso
+    assert c.wallet == D("10.00")
+    with pytest.raises(DomainError):
+        shop.create_order(c.id, "1.00", "b")
+    shop.check_invariants()
+
+
+def test_m12_credit_order_shows_paid_when_receivable_paid(shop):
+    c = shop.register()
+    shop.enable_credit(c.id, "50.00")
+    o = shop.create_order(c.id, "20.00", "a")
+    assert o.payment_status == "ON_CREDIT"
+    shop.approve(shop.report_payment(c.id, "20.00", reference="T").id)
+    assert o.payment_status == "PAID"
+    shop.check_invariants()
+
+
+def test_m11_every_model_error_code_is_in_catalog():
+    src = pathlib.Path(__file__).with_name("money_model.py").read_text()
+    raised = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DomainError":
+            raised.add(node.args[0].value)
+    assert raised <= ERROR_CODES, raised - ERROR_CODES
+    catalog = pathlib.Path(__file__).parents[1].joinpath("docs/plan/03-flujos-de-negocio.md").read_text()
+    missing = {c for c in ERROR_CODES if f"`{c}`" not in catalog}
+    assert not missing, f"códigos sin documentar en 03 §7: {missing}"
+
+
 # --- Propiedades: cualquier secuencia de operaciones respeta las invariantes
 OPS = st.lists(st.tuples(
-    st.sampled_from(["order", "pay", "pay_order", "approve", "reject", "cancel", "advance",
-                     "reverse", "adjust", "reduce", "charge", "time", "credit"]),
+    st.sampled_from(["order", "sched", "pay", "pay_order", "approve", "reject", "cancel", "advance",
+                     "reverse", "adjust", "reduce", "charge", "time", "credit", "cash", "block",
+                     "unblock", "payout", "void", "forgive"]),
     st.integers(min_value=0, max_value=50),
     st.integers(min_value=1, max_value=9000),
 ), max_size=60)
 
 
-@settings(max_examples=400, deadline=None)
+@settings(max_examples=500, deadline=None)
 @given(OPS)
 def test_property_invariants_hold(ops):
     shop = Shop()
@@ -241,6 +389,20 @@ def test_property_invariants_hold(ops):
         try:
             if op == "order":
                 shop.create_order(c.id, amount, f"k{seq}")
+            elif op == "sched":
+                shop.create_order(c.id, amount, f"k{seq}", due_at=shop.now + 60 + cents)
+            elif op == "cash":
+                shop.set_cash(c.id)
+            elif op == "block":
+                shop.block(c.id)
+            elif op == "unblock":
+                shop.unblock(c.id)
+            elif op == "payout":
+                shop.payout(c.id, amount)
+            elif op in ("void", "forgive") and shop.receivables:
+                recs = list(shop.receivables.values())
+                r = recs[i % len(recs)]
+                (shop.void_receivable if op == "void" else shop.forgive_receivable)(r.id)
             elif op == "credit":
                 shop.enable_credit(c.id, str(D(cents) / 10))
             elif op == "pay":

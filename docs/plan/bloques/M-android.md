@@ -1,57 +1,63 @@
 # M — Android: app del cliente (Play Store) y app del motorizado (APK)
 
-**Fase 1** · **Rama** `block/M` · Diseño: `DESIGN.md`, `docs/design/android-theme.md`, `cliente-android.md`, `delivery-android.md` · Skill: `impeccable` (`reference/android.md`) · Contrato: `contracts/openapi.json`
+**Fase 1** · rama `block/M` · diseño `DESIGN.md`, `docs/design/{android-theme,cliente-android,delivery-android}.md` · skill **impeccable** (`reference/android.md`) · contrato `contracts/openapi.json`
 
 ## Objetivo
-Dos apps nativas, sencillas y robustas con mala señal, en un solo proyecto Gradle.
+Dos apps nativas sencillas y robustas con mala señal, en un solo proyecto Gradle.
 
 ## Estructura
 ```
-android/ (Gradle Kotlin DSL, version catalog, AGP y Kotlin estables recientes, minSdk 24, targetSdk 35)
-├─ core/designsystem   tema Material 3 de DSN + componentes (MoneyText USD/Bs, StatusPill, EmptyState…)
-├─ core/network        Retrofit + OkHttp (auth interceptor + refresh, Idempotency-Key), kotlinx.serialization,
-│                      BigDecimal desde string, ApiError{code, detail}, DTOs del contrato
-├─ core/data           SessionStore (DataStore), repositorios, cola de acciones pendientes (delivery)
-├─ app-cliente         com.panaderia.cliente   (flavors: mock, staging, prod → BASE_URL)
-└─ app-delivery        com.panaderia.delivery
+android/  (Gradle Kotlin DSL + version catalog + **wrapper** generado con el Gradle local; AGP y Kotlin estables; minSdk 24, targetSdk 35)
+├─ core/network      kotlin("jvm") PURO: Retrofit, OkHttp (auth interceptor + Authenticator de refresh, Idempotency-Key),
+│                    kotlinx.serialization, BigDecimal desde string, ApiError{code, detail, meta}, DTOs del contrato (camelCase)
+├─ core/data         kotlin("jvm") PURO: repositorios, SessionStore sobre datastore-preferences-core, cola de acciones pendientes
+├─ core/designsystem Android library: tema Material 3 de DSN + componentes (MoneyText muestra los Bs de la API, StatusPill, EmptyState…)
+├─ app-cliente       com.panaderia.cliente   (flavors mock/staging/prod → BASE_URL)
+└─ app-delivery      com.panaderia.delivery
 ```
-FCM detrás de un flag: sin `google-services.json`, el push queda apagado y la app sigue funcionando (el motorizado hace *polling* cada 30 s en primer plano).
+FCM va detrás de un flag: sin `google-services.json`, el push se apaga y la app sigue funcionando. En delivery, *polling* cada 30 s en primer plano.
 
-## App cliente — pantallas
-1. **Registro e inicio de sesión:** registro sin aprobación, con tipo de negocio (perros calientes, bodega, cafetería/restaurante, eventos, otro).
-2. **Catálogo:** chips de categorías; tarjetas con foto, precio USD y Bs (tasa de hoy), unidad y − / + respetando `minQty`; “Agotado”.
-3. **Carrito**
-   - Selector **“Lo quiero hoy” / “Programar”**, con fecha y hora dentro de la ventana de `/settings/public`.
-   - Dirección, notas y resumen con `POST /orders/quote`: “Usamos $X de tu billetera”, faltante o crédito disponible.
-4. **Confirmar y pagar** (03 §3.2):
-   - **Billetera alcanza:** “¡Listo! Pagado con tu billetera” y el pedido en camino a producción.
-   - **No alcanza:** la pantalla de pago muestra el **faltante en USD y Bs**, los datos de pago (métodos y cuentas, con botón copiar) y el formulario: método o cuenta, monto, **referencia**, fecha, titular y **foto del comprobante** (Photo Picker o cámara). Luego, el estado “Pago en revisión”.
-   - **Crédito:** confirmado al instante; si excede el límite, el mensaje de la API y la acción “Recargar billetera”.
-5. **Mis pedidos:** estados en lenguaje simple, detalle, cancelar si se puede, **Repetir pedido**, y “Pagar faltante” si está en AWAITING_PAYMENT.
-6. **Billetera:** saldo a favor, deuda y vencidas, crédito disponible, movimientos, **Recargar** (mismo formulario de pago) y mis pagos con estado y motivo de rechazo.
-7. **Perfil:** datos, dirección, contacto o WhatsApp del negocio, **eliminar cuenta** (requisito de Play) y cerrar sesión.
-8. **Push:** pedido confirmado o en camino, pago aprobado o rechazado y crédito habilitado. Al tocar, abre el pedido o el pago.
+## App cliente
+1. **Registro** sin aprobación, con tipo de negocio (perros calientes, bodega, cafetería/restaurante, eventos, otro). **Login.**
+2. **Catálogo:** `GET /catalog` con `price` (USD) y `priceVes` (Bs **de la API**; si es `null`, solo USD), foto (`imageUrl`), − / + con `minQty` y estado “Agotado”.
+3. **Carrito:** “Lo quiero hoy” o “Programar” (fecha y hora dentro de la ventana de `/settings/public`). `POST /orders/quote` para el resumen (“Usamos $X de tu billetera”, `totalVes`, faltante o crédito disponible).
+4. **Confirmar** (`POST /orders`, `Idempotency-Key` generado una vez por intento):
+   - **Billetera suficiente:** “¡Listo! Pagado con tu billetera.”
+   - **Faltante:**
+     - pantalla de pago con `amountDue`, `amountDueVes` y `expiresAt` (“paga antes de las HH:MM”);
+     - datos de pago (`paymentMethods[].accounts[]` con `id`, botón copiar);
+     - formulario: cuenta, `localCurrency`, monto **prellenado con `amountDueVes` o `amountDue`**, referencia, fecha, titular y comprobante (Photo Picker o cámara → `POST /files`, multipart);
+     - envío con `POST /payments`, y luego “Pago en revisión”.
+   - **Crédito:** confirmado al instante. Si se excede, se muestra el `detail` de la API con la acción “Recargar billetera”.
+   - `OPEN_DEBT` u `OVERDUE_DEBT` → pantalla para pagar la deuda.
+5. **Mis pedidos:** estados en lenguaje simple, detalle, cancelar, **repetir pedido** y “Pagar faltante”. Esta última lee de `GET /orders/{id}` los valores `amountDue`, `amountDueVes`, `rate` y `expiresAt`, y los métodos de `GET /payment-methods`.
+6. **Billetera:** saldo, deuda, vencidas, crédito disponible, movimientos, **Recargar** y mis pagos (`GET /payments`, `GET /payments/{id}` con el motivo de rechazo).
+7. **Perfil:** datos, dirección, WhatsApp del negocio, **eliminar cuenta** (`DELETE /auth/account`) y cerrar sesión.
+8. **Push:** pedido confirmado o en camino, pago aprobado o rechazado, crédito habilitado. Abre el pedido o el pago.
 
-## App delivery — pantallas
-Login persistente. **Por salir** (con la hora programada visible), con selección múltiple para “En camino”. **En camino**, con “Entregado” y confirmación. Llamar, WhatsApp y “Abrir en Maps” (dirección en texto). Contador de entregados hoy. Push con sonido. Cola local de acciones fallidas con reintento automático. Aviso “Actualiza la app” si la versión es menor a la de `/settings/public`.
+## App delivery
+- **Login** persistente.
+- **Por salir:** READY asignados a mí o sin asignar, con la hora visible; selección múltiple → “En camino” (respuesta `{updated, skipped}`).
+- **En camino:** “Entregado” con confirmación. Un 200 repetido es éxito.
+- Llamar, WhatsApp y “Abrir en Maps” (dirección en texto). Contador de entregados hoy.
+- Push con sonido.
+- **Cola local** de acciones fallidas con reintento: `skipped` o 200 cuentan como éxito; un 409 real se muestra al usuario.
+- Aviso “Actualiza la app” si `versionCode < minVersionDelivery`.
 
 ## Reglas
-- La app **no calcula dinero**: muestra los montos de la API. `BigDecimal` siempre; nunca `Double`.
-- `Idempotency-Key` (UUID) generado **una vez** por intento de pedido o pago y reutilizado en los reintentos.
-- Material 3 según `impeccable/reference/android.md`: Back predictivo, edge-to-edge, 48 dp, `sp`, tema oscuro.
-- Textos en español de Venezuela; fechas y horas en `America/Caracas`.
+- La app **no calcula dinero**: todo monto, USD o Bs, viene de la API. Siempre `BigDecimal`.
+- Material 3 según `android.md` de Impeccable: Back predictivo, edge-to-edge, 48 dp, `sp`, tema oscuro.
+- Español de Venezuela; hora de Caracas.
 
-## Limitantes
-- **Sin Android SDK ni emulador** en el contenedor (`dl.google.com` bloqueado). Escribir código conservador y estándar, y pruebas JVM (ViewModels con repositorios falsos, Turbine). La compilación la verifica GitHub Actions al integrar; Q2 corrige lo que falle.
-- `.github/workflows/android.yml`: JDK 17, `setup-android`, `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug testDebugUnitTest`, y las APKs como artefactos.
-- Incluir el **Gradle wrapper** (`gradlew`, `gradle/wrapper/*`), generado con el Gradle local (`gradle wrapper --gradle-version <estable>`).
+## Limitantes y verificación
+- **Sin Android SDK** en el contenedor. En local corre `gradle :core:network:test :core:data:test` (JVM puro): DTOs, mapper de `ApiError`, serializer de BigDecimal, repositorios con MockWebServer, cola de reintentos e idempotencia.
+- Los ViewModels y la UI se compilan y prueban en CI.
+- `.github/workflows/android.yml`: JDK 17, `android-actions/setup-android`, y luego `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug :app-cliente:testMockDebugUnitTest :app-delivery:testMockDebugUnitTest :core:network:test :core:data:test :core:designsystem:testDebugUnitTest`. Se suben APKs y `**/build/test-results/**`.
+- **Entrega temprana:** en cuanto el esqueleto compile en su cabeza (módulos, wrapper, login), el agente hace commit y lo informa. El orquestador lo publica para que CI dé su primer veredicto mientras M sigue.
 
 ## Pruebas exigidas
-- ViewModel de checkout en sus 4 casos: billetera suficiente, parcial, cero y crédito excedido.
-- Formulario de pago: validaciones e idempotencia en el reintento.
-- Repositorio de delivery: la cola de reintentos.
-- Mapper de `ApiError`.
-- Capturas Roborazzi (si se logra en JVM) en `docs/handoffs/assets/M-*.png`.
+- **JVM (local):** red y datos según lo anterior.
+- **App (CI):** ViewModel de checkout en 4 casos (billetera suficiente, parcial, cero, crédito excedido); formulario de pago (validaciones, reintento con la misma llave); cola de delivery.
 
 ## No tocar
 `api/`, `web/`, `contracts/` (solo lectura).

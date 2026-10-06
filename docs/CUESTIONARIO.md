@@ -36,3 +36,22 @@
 | C-28 | Firebase (push) | Lo crea el dueño; mientras tanto el push queda desactivado sin romper nada. |
 | C-30 | Auto-cancelación de pedidos impagos | A las 24 h (o antes de la hora programada), salvo que haya un pago en revisión. |
 | C-31 | Retiro en tienda (pickup) | No: todo es delivery en v1. |
+| C-32 | Cliente de contado con deuda (por pago revertido, fiado o crédito anterior) | No puede pedir hasta pagarla (`OPEN_DEBT`). |
+| C-33 | Bloquear a un cliente | Se cancelan sus pedidos que esperan pago; los pagos en revisión siguen y su dinero queda a favor. |
+| C-34 | Ventana mínima para pagar un pedido | 30 min (también tras un rechazo). |
+| C-35 | Devolver saldo a favor en dinero | Lo hace el admin desde la ficha del cliente; queda como egreso en la cuenta elegida. |
+| C-36 | Perdonar deuda | “Condonar” deja la deuda en lo ya pagado, sin devolver nada. “Anular” solo aplica a cargos manuales y reversos. |
+
+## Decisión pendiente del dueño (importante)
+
+| # | Pregunta | Recomendación |
+|---|---|---|
+| C-37 | El repo `jmcakes` es **público** y va a contener código adaptado de OpenGravity, que es **privado** (lógica de pagos y seguridad). ¿Lo hacemos privado? | **Hacerlo privado.** Play Store no exige que sea público. Mientras tanto, los agentes sanean todo lo que copian y CI corre `gitleaks`. |
+
+## Requiere al dueño (no lo puede hacer un agente)
+1. **Railway ↔ GitHub:** instalar o verificar la GitHub App de Railway con acceso a `edicsonbtos/jmcakes`, y **aprobar los despliegues** (`accept-deploy`) de staging y luego de producción.
+2. **Firebase:** crear el proyecto para las notificaciones push y entregar `google-services.json` (apps) y `FCM_CREDENTIALS_JSON` (API).
+3. **Google Play Console:** cuenta (25 USD) y 12 testers durante 14 días para la prueba cerrada, si la cuenta es personal.
+4. **Firma Android:** generar los keystores y cargarlos como secretos de GitHub.
+5. **Dominio propio** (opcional).
+6. **Datos reales:** catálogo, precios, métodos de pago con sus cuentas, clientes y deudas actuales (CSV).

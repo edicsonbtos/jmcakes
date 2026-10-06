@@ -1,88 +1,58 @@
-# 04 — Fases y bloques para agentes autónomos
+# 04 — Fases y enjambre de 10 agentes
 
-El proyecto se divide en **11 bloques** agrupados en **5 fases**. Cada bloque es una unidad que un agente de Claude puede ejecutar de principio a fin en una sesión en la nube, con entradas, salidas, límites y criterio de terminado bien definidos.
-
-La pieza que permite el paralelismo es el **contrato de API** (`contracts/openapi.yaml`) que produce la Fase 0: con él, la web y las apps Android pueden construirse contra un **servidor mock** mientras el backend se construye al mismo tiempo.
-
-## Mapa de dependencias
+El trabajo se ejecuta con **10 agentes** en **3 fases**. Una sesión **orquestadora** coordina:
+- lanza los agentes, cada uno en su propio *git worktree* y rama local;
+- integra sus ramas en la rama de integración (`claude/happy-johnson-24innr`), corre las compuertas de [07-pruebas](07-pruebas.md) y publica;
+- maneja la infraestructura: Neon, Railway y GitHub Actions.
 
 ```
-FASE 0 (secuencial)      FASE 1 (paralelo: backend)        FASE 2 (paralelo: interfaces)      FASE 3          FASE 4
-                                                            ── arrancan contra MOCK al ──
-                                                               terminar F0, cierran contra
-                                                               staging al terminar Fase 1
-
-                    ┌──▶ B1 API Catálogo/Clientes ──┐      ┌──▶ W1 Web Admin ───────────┐
-                    │                               │      │                            │
- F0 Fundación ──────┼──▶ B2 API Pedidos/Cocina/Del ─┼─────▶├──▶ W2 Web Cocina ──────────┼──▶ Q1 Integración ──▶ L1 Lanzamiento
- + contrato v1      │                               │      │                            │      y QA E2E          (prod, Play Store,
-                    └──▶ B3 API Finanzas/Dashboard ─┘      ├──▶ M1 Android Cliente ─────┤                         APK, manuales)
-                    │                                      │                            │
-                    └──────────────── (mock) ─────────────▶└──▶ M2 Android Delivery ────┘
+FASE 0 · Fundación (paralelo, 2)        FASE 1 · Construcción (paralelo, 6)              FASE 2 · Integración (2)
+┌───────────────────────────────┐       ┌─────────────────────────────────────────┐      ┌──────────────────────────────┐
+│ FND  API base + BD + contrato │──┐    │ B1  API catálogo·clientes·config        │      │ Q1  Integración backend+web, │
+│      completo + auth + CI api │  │    │ B2  API pedidos·cocina·delivery·SSE·push│      │     E2E, deploy Railway,     │
+└───────────────────────────────┘  ├──▶ │ B3  API dinero·pagos·tasa·dashboard     │──G2─▶│     auditoría contable y     │
+┌───────────────────────────────┐  │    │ W1  Web panel admin                     │      │     seguridad                │
+│ DSN  Impeccable: DESIGN.md,   │──┘    │ W2  Web cocina                          │      ├──────────────────────────────┤
+│      tokens, web base + UI kit│  G1   │ M   Android (cliente + delivery)        │      │ Q2  Android en CI + QA apps +│
+│      + spec visual Android    │       └─────────────────────────────────────────┘      │     auditoría Impeccable     │
+└───────────────────────────────┘                                                         └──────────────────────────────┘
 ```
 
-## Resumen de bloques
+## Los 10 agentes
 
-| ID | Bloque | Fase | Depende de | Paralelo con | Carpetas propias | Esfuerzo* |
+| # | ID | Agente | Fase | Depende de | Carpetas propias (escritura) | Ficha |
 |---|---|---|---|---|---|---|
-| [F0](bloques/F0-fundacion.md) | Fundación, contrato, BD, auth, esqueletos, CI, infra | 0 | Cuestionario respondido (mín. C-1..C-5) | — | todo el esqueleto, `contracts/`, `api/src/db`, `api/src/lib`, `api/src/modules/auth`, `web/src/shared`, `android/core` | L |
-| [B1](bloques/B1-api-catalogo-clientes.md) | API catálogo, clientes, configuración, imágenes | 1 | F0 | B2, B3, W*, M* | `api/src/modules/{catalog,customers,settings}` | M |
-| [B2](bloques/B2-api-pedidos-produccion-delivery.md) | API pedidos, cocina, delivery, SSE, push | 1 | F0 | B1, B3, W*, M* | `api/src/modules/{orders,kitchen,delivery,notifications}` | L |
-| [B3](bloques/B3-api-finanzas-dashboard.md) | API billetera, CxC, pagos, tasa, dashboard | 1 | F0 | B1, B2, W*, M* | `api/src/modules/{finance,dashboard}` | L |
-| [W1](bloques/W1-web-admin.md) | Web backoffice del administrador | 2 | F0 (mock) → B1-B3 (real) | todos | `web/src/app/admin` | L |
-| [W2](bloques/W2-web-cocina.md) | Web de producción (tablet) | 2 | F0 (mock) → B2 (real) | todos | `web/src/app/cocina` | S |
-| [M1](bloques/M1-android-cliente.md) | App Android del cliente (Play Store) | 2 | F0 (mock) → B1-B3 (real) | todos | `android/app-cliente` | L |
-| [M2](bloques/M2-android-delivery.md) | App Android del motorizado (APK) | 2 | F0 (mock) → B2 (real) | todos | `android/app-delivery` | S |
-| [Q1](bloques/Q1-integracion-qa.md) | Integración end-to-end, QA, seguridad | 3 | B1-B3, W1, W2, M1, M2 | — | `e2e/`, correcciones transversales | M |
-| [L1](bloques/L1-lanzamiento.md) | Producción, Play Store, APK, respaldo, manuales | 4 | Q1 | — | `docs/manuales`, `.github/workflows/release-*`, `android/*/fastlane` | M |
+| 1 | FND | Fundación API, BD y contrato | 0 | plan | `api/**` (todo al inicio), `contracts/`, `spec/` (solo lectura), `.github/workflows/{api,contract}.yml`, `.claude/skills/*-panaderia`, `.claude/agents/auditor-contable.md`, `CLAUDE.md` §Comandos | [FND](bloques/FND-fundacion-api.md) |
+| 2 | DSN | Sistema de diseño (Impeccable) y base web | 0 | `PRODUCT.md` | `DESIGN.md`, `docs/design/**`, `web/**` (todo al inicio), `.github/workflows/web.yml` | [DSN](bloques/DSN-diseno-y-web-base.md) |
+| 3 | B1 | API catálogo, clientes, usuarios, config, archivos | 1 | FND | `api/src/domain/{catalog,customers,users,settings,files}/`, `api/src/api/v1/{catalog,customers,users,settings,files,audit}.py`, `api/tests/b1_*` | [B1](bloques/B1-api-catalogo-clientes.md) |
+| 4 | B2 | API pedidos, agenda, cocina, delivery, eventos, push | 1 | FND | `api/src/domain/{orders,kitchen,delivery}/`, `api/src/services/{events,push}.py`, `api/src/api/v1/{orders,kitchen,delivery,events}.py`, `api/src/jobs/unpaid_auto_cancel.py`, `api/tests/b2_*` | [B2](bloques/B2-api-pedidos-cocina-delivery.md) |
+| 5 | B3 | API dinero: pagos, billetera, CxC, cuentas, tasa, dashboard, cierres | 1 | FND | `api/src/services/{ledger,money}.py`, `api/src/domain/{payments,payment_methods,wallet,receivables,cash_accounts,exchange_rates,finance,dashboard,closures}/`, `api/src/api/v1/{payments,wallet,admin_money,rates,dashboard,closures,export}.py`, `api/src/jobs/{bcv_sync,daily_closing}.py`, `api/tests/b3_*` | [B3](bloques/B3-api-dinero.md) |
+| 6 | W1 | Web panel del administrador | 1 | DSN (+ mock de FND) | `web/src/app/(admin)/**`, `web/src/components/admin/**`, `web/e2e/admin*` | [W1](bloques/W1-web-admin.md) |
+| 7 | W2 | Web de producción (cocina) | 1 | DSN (+ mock de FND) | `web/src/app/(cocina)/**`, `web/src/components/cocina/**`, `web/e2e/cocina*` | [W2](bloques/W2-web-cocina.md) |
+| 8 | M | Android: app cliente + app delivery | 1 | DSN (spec visual) + contrato de FND | `android/**`, `.github/workflows/android.yml` | [M](bloques/M-android.md) |
+| 9 | Q1 | Integración backend+web, E2E, staging, auditorías | 2 | todo lo anterior integrado | `e2e/**`, `.github/workflows/e2e.yml`, correcciones transversales (commits pequeños) | [Q1](bloques/Q1-integracion.md) |
+| 10 | Q2 | Android en CI, QA de apps, auditoría de diseño | 2 | Q1 (staging) | `android/**` (correcciones), `docs/handoffs/assets/**`, correcciones de UI web vía Impeccable | [Q2](bloques/Q2-android-y-diseno.md) |
 
-\* S ≈ 1 sesión de agente · M ≈ 1–2 sesiones · L ≈ 2–4 sesiones.
+## Por qué funciona en paralelo
 
-## Contratos internos entre bloques del backend
+1. **El contrato está completo antes de la Fase 1.** FND declara todos los endpoints de [08](08-api-endpoints.md), con esquemas y stubs `501`, y exporta `contracts/openapi.json`. W1, W2 y M construyen contra el mock (Prism) sin esperar a B1–B3.
+2. **Las tablas también.** FND crea **todo** el esquema de [02](02-modelo-de-datos.md) en la migración inicial. B1–B3 no necesitan migraciones; si una es imprescindible, el protocolo §4 evita choques.
+3. **Interfaces internas con stubs** ([08](08-api-endpoints.md) §Interfaces): B2 llama a `MoneyService` y B3 a `OrdersService` sin esperarse.
+4. **Routers ya registrados.** FND deja `main.py` con todos los routers incluidos; nadie más toca `main.py` ni `models_registry.py`.
+5. **Carpetas disjuntas** por agente (tabla de arriba) → merges sin conflictos.
+6. **Diseño antes que pantallas.** DSN entrega tokens, componentes y layouts; W1 y W2 solo componen pantallas con ellos.
 
-Para que B1, B2 y B3 no se bloqueen entre sí, F0 deja creadas estas **interfaces con implementación stub** en `api/src/modules/*/index.ts`. Cada bloque implementa la suya; los demás solo la llaman.
+## Riesgos y mitigación
 
-```ts
-// api/src/modules/finance/index.ts  — implementa B3, consume B2
-export interface FinanceService {
-  assertCanPlaceOrder(customerId: string, totalCents: bigint): Promise<void>; // lanza CREDIT_LIMIT_EXCEEDED
-  onOrderConfirmed(tx: Tx, order: Order): Promise<void>;   // crea receivable si CREDIT + settle()
-  onOrderCancelled(tx: Tx, order: Order): Promise<void>;   // VOID + devolución a billetera
-  onOrderDelivered(tx: Tx, order: Order): Promise<void>;   // fija due_at
-}
+| Riesgo | Mitigación |
+|---|---|
+| Android no compila en el contenedor (sin SDK; `dl.google.com` bloqueado) | M escribe código siguiendo patrones estándar y pruebas JVM. El orquestador publica y GitHub Actions compila. Q2 itera sobre los logs de CI hasta verde. Si Q2 logra armar un SDK mínimo desde `maven.google.com`, compila local. |
+| Neon no es accesible por 5432 desde el contenedor | Las pruebas usan Postgres 16 local. Las migraciones en Neon las aplica Railway (`preDeployCommand`). Las verificaciones de esquema van por el MCP de Neon. |
+| Divergencia entre implementación y reglas de dinero | `spec/` es la referencia. B3 porta los escenarios. Q1 los corre por HTTP. Auditor contable obligatorio. |
+| Merge de 6 ramas | Carpetas disjuntas. El contrato se regenera tras integrar. Si hay varias cabezas de Alembic, se agrega una revisión de merge. |
+| Agente que se sale de su alcance | La ficha lista lo que **no** debe tocar. El orquestador revisa el `git diff --stat` por carpeta antes de integrar y rechaza cambios fuera de alcance. |
 
-// api/src/modules/orders/index.ts  — implementa B2, consume B3
-export interface OrdersService {
-  confirmPaidOrder(tx: Tx, orderId: string, actor: Actor): Promise<void>; // AWAITING_PAYMENT → CONFIRMED
-}
-
-// api/src/modules/notifications/index.ts — implementa B2, consumen B1/B3
-export interface Notifier {
-  publish(event: DomainEvent): void;               // SSE a web
-  push(userId: string, msg: PushMessage): Promise<void>; // FCM
-}
-
-// api/src/modules/catalog/index.ts — implementa B1, consume B2
-export interface CatalogService {
-  priceOrderLines(customerId: string, lines: {productId: string; qty: number}[]): Promise<PricedLine[]>; // valida min_qty, disponibilidad, lista de precios
-}
-
-// api/src/modules/customers/index.ts — implementa B1, consumen B2/B3
-export interface CustomersService {
-  getForUpdate(tx: Tx, customerId: string): Promise<Customer>;
-  getByUserId(userId: string): Promise<Customer | null>;
-}
-```
-
-Los stubs de F0 devuelven valores razonables (p. ej. `assertCanPlaceOrder` no lanza) para que cada bloque pueda probar su parte aislado. Los tests de integración entre módulos los hace Q1.
-
-## Orden de lanzamiento recomendado
-
-1. **Responder el cuestionario** (al menos C-1 a C-5, que afectan el esquema).
-2. Lanzar **F0** (una sesión). Revisar y hacer merge de su PR.
-3. Lanzar en paralelo **B1, B2, B3, W1, W2, M1, M2** (7 sesiones). Los W/M trabajan contra el mock; cuando un B se fusiona, el W/M correspondiente cambia a staging.
-   - Si se prefiere menos paralelismo: primero B1+B2+B3, luego W1+W2+M1+M2.
-4. Lanzar **Q1** cuando todo lo anterior esté fusionado.
-5. Lanzar **L1**.
-
-Cada ficha de bloque incluye un **prompt listo para pegar** en una nueva sesión de Claude Code en la nube.
+## Duración estimada
+- Fase 0: ~1 sesión larga por agente.
+- Fase 1: ~1–2 por agente.
+- Fase 2: ~1 por agente, más ciclos de CI de Android.

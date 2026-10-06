@@ -1,139 +1,38 @@
-# Cuestionario de aclaraciones
+# Cuestionario de aclaraciones (v2)
 
-Responde directamente en este archivo (en la línea **Respuesta:**) o en el chat. Cada pregunta tiene un **valor por defecto**: si no se responde, los agentes lo usan y lo anotan en su handoff.
+## Respondidas por el dueño (2026-10-06)
 
-Las preguntas marcadas 🔴 **afectan el esquema de la base de datos o el contrato** y conviene responderlas **antes de lanzar F0**. Las 🟡 se necesitan antes de la Fase 1/2. Las 🟢 pueden esperar hasta el lanzamiento.
+| # | Pregunta | Respuesta |
+|---|---|---|
+| C-1 | Moneda | Precios en **USD**, mostrados en **Bs a tasa BCV**. |
+| C-2 | Tasa | BCV automática con la lógica de OpenGravity (la manual del admin manda). |
+| C-3 | Aprobación de clientes | **No requiere aprobación.** Todo cliente nuevo queda en **contado**. |
+| C-4 | Contado: cuándo paga | Al terminar el pedido en la app. **Entra a cocina al aprobar el pago.** |
+| C-5 | Verificación de pagos | **Manual, uno por uno**, como en OpenGravity. |
+| C-6 | Programación | “Lo quiero hoy” o **fecha y hora personalizadas**; en cocina, la fecha en grande. |
+| C-6b | Billetera insuficiente | **Usa el saldo y pide la diferencia**; si el pago se rechaza o se cancela el pedido, el saldo vuelve. |
+| C-13 | Marca | Nombre por definir (“Panadería”, configurable); sin logo todavía. |
+| C-21 | Clientes típicos | Perros calienteros, bodegas y abastos, cafeterías y restaurantes, eventos y particulares. |
+| C-27 | Infraestructura | Proyectos **nuevos** en Neon y Railway (creados). |
+| C-29 | Ejecución | Enjambre de **10 agentes** por fases, con pruebas; plan auditado dos veces. |
 
----
+## Pendientes (no bloquean: los agentes usan el valor por defecto)
 
-## A. Dinero y cobranza
-
-**C-1 🔴 ¿En qué moneda se fijan los precios y se lleva la deuda?**
-Opciones: (a) USD, y los pagos en Bs se convierten a la tasa del día · (b) Bs · (c) ambas por separado (dos billeteras).
-*Por qué importa:* define cómo se guardan todos los montos y cómo se muestra la deuda.
-**Por defecto:** (a) USD como moneda base, mostrando el equivalente en Bs.
-**Respuesta:**
-
-**C-2 🟡 ¿Qué tasa de cambio se usa y quién la carga?**
-Opciones: (a) el admin la escribe cada mañana · (b) se toma automáticamente la tasa oficial BCV · (c) tasa propia del negocio distinta a la BCV.
-**Por defecto:** (a) manual, con la opción de automatizar BCV más adelante.
-**Respuesta:**
-
-**C-3 🔴 ¿Un cliente que se registra en la app puede pedir de inmediato o necesita aprobación del admin?**
-**Por defecto:** necesita aprobación; al aprobarlo, el admin elige contado o crédito.
-**Respuesta:**
-
-**C-4 🔴 Clientes de contado: ¿cuándo pagan?**
-Opciones: (a) **antes** de que el pedido pase a cocina (reportan pago móvil/transferencia y el admin lo verifica) · (b) **contra entrega** (el motorizado cobra) · (c) ambas, según el cliente.
-*Por qué importa:* con (b) el motorizado necesitaría ver el monto a cobrar y registrar que cobró.
-**Por defecto:** (a) prepago.
-**Respuesta:**
-
-**C-5 🔴 ¿Quién verifica los pagos reportados desde la app?**
-Opciones: (a) el admin los revisa y aprueba uno a uno · (b) se acreditan automáticamente y el admin solo puede revertir · (c) automáticos hasta cierto monto.
-**Por defecto:** (a) verificación manual (reduce riesgo de referencias falsas).
-**Respuesta:**
-
-**C-14 🟡 ¿Qué métodos de pago aceptan?** (marca todos) Pago móvil · Transferencia Bs · Zelle · Efectivo USD · Efectivo Bs · Punto de venta · Binance/USDT · Otro. Indica también los **datos de pago** que verá el cliente (bancos, teléfono de pago móvil, correo Zelle).
-**Por defecto:** pago móvil, transferencia, Zelle, efectivo USD.
-**Respuesta:**
-
-**C-7 🟡 ¿Desde cuándo corre el plazo de una deuda a crédito y cuántos días tiene?**
-Opciones: desde que se hace el pedido / desde que se entrega. Días: 7, 15, 30, distinto por cliente.
-**Por defecto:** desde la entrega; 7 días, configurable por cliente.
-**Respuesta:**
-
-**C-23 🟡 ¿Qué pasa cuando un cliente a crédito tiene facturas vencidas?**
-Opciones: (a) no puede pedir más hasta pagar · (b) puede pedir pero se avisa al admin · (c) bloqueo tras N días de vencida.
-**Por defecto:** (c) bloqueo si tiene facturas vencidas hace más de 7 días.
-**Respuesta:**
-
-**C-20 🟢 ¿Necesitan factura fiscal (SENIAT), IVA o nota de entrega impresa?**
-**Por defecto:** no en v1; el sistema genera una nota de entrega/estado de cuenta en PDF no fiscal.
-**Respuesta:**
-
-## B. Pedidos y producción
-
-**C-6 🔴 ¿Los pedidos son para el mismo día o para el día siguiente? ¿Hay hora de corte?**
-Ejemplo: “lo que se pide antes de las 6:00 pm se entrega mañana temprano”.
-**Por defecto:** existe una hora de corte configurable; antes del corte = entrega hoy, después = mañana. El cliente puede elegir la fecha.
-**Respuesta:**
-
-**C-9 🟡 Si en cocina no alcanza un producto, ¿se permite entregar el pedido incompleto?**
-Opciones: (a) el admin edita el pedido antes de “Listo” y se ajusta la cuenta · (b) cocina puede marcar cantidades entregadas · (c) no se permite.
-**Por defecto:** (a) solo el admin edita.
-**Respuesta:**
-
-**C-19 🟡 ¿Hay monto mínimo por pedido o mínimo por producto?** (ej.: “mínimo 10 canillas”, “pedido mínimo $20”)
-**Por defecto:** mínimo por producto configurable; sin mínimo por pedido total.
-**Respuesta:**
-
-**C-16 🟡 ¿Se cobra el delivery?** (gratis / monto fijo / por zona)
-**Por defecto:** gratis (no se modela costo de envío).
-**Respuesta:**
-
-**C-17 🟡 Horario y días de operación** (¿abren domingos? ¿a qué hora sale el motorizado?). ¿Se debe impedir pedir en días cerrados?
-**Por defecto:** lunes a sábado; pedidos permitidos siempre, con fecha de entrega al próximo día hábil.
-**Respuesta:**
-
-**C-10 🟢 Cocina: ¿web en una tablet/TV (recomendado) o app Android?**
-**Por defecto:** web en tablet (`/cocina`), instalable como PWA.
-**Respuesta:**
-
-## C. Clientes y catálogo
-
-**C-8 🟡 ¿Todos los mayoristas pagan el mismo precio, o hay precios especiales por cliente / por volumen?**
-**Por defecto:** un solo precio mayorista; listas de precios por cliente quedan preparadas pero opcionales.
-**Respuesta:**
-
-**C-15 🟡 Clientes del negocio (detal): ¿usarán la app o solo se llevan sus cuentas desde la web?** ¿Necesitan registrar las **ventas de mostrador** del día (un POS simple) para que el dashboard muestre los ingresos totales del local?
-**Por defecto:** los clientes detal no usan app; el admin registra sus fiados (cargos) y abonos. Sin POS en v1; los ingresos del dashboard son solo de pagos registrados en el sistema.
-**Respuesta:**
-
-**C-21 🟢 Volumen aproximado:** ¿cuántos mayoristas, cuántos pedidos por día y cuántos productos?
-**Por defecto:** < 100 clientes, < 150 pedidos/día, < 100 productos (el diseño escala mucho más).
-**Respuesta:**
-
-**C-22 🟡 ¿Hay datos existentes para migrar?** (lista de clientes, deudas actuales, productos y precios en Excel)
-**Por defecto:** sí, se importarán por CSV en L1.
-**Respuesta:**
-
-## D. Usuarios, marca y operación
-
-**C-24 🟡 ¿Cuántas personas usan el panel de administración?** ¿Se necesitan permisos distintos (p. ej. un cajero que solo aprueba pagos)?
-**Por defecto:** uno o más usuarios con rol ADMIN, todos con control total.
-**Respuesta:**
-
-**C-13 🟡 Marca:** nombre comercial exacto (¿“JM Cakes”?), logo, colores, teléfono/WhatsApp del negocio.
-**Por defecto:** “JM Cakes”, paleta cálida de panadería; se reemplaza cuando llegue el logo.
-**Respuesta:**
-
-**C-25 🟢 ¿Quieren avisos por WhatsApp además de las notificaciones push?** (tiene costo con la API oficial de WhatsApp Business)
-**Por defecto:** no en v1; solo botón “Escribir por WhatsApp”.
-**Respuesta:**
-
-## E. Infraestructura, cuentas y publicación
-
-**C-27 🔴 Accesos para los agentes:** ¿los MCP de **Neon** y **Railway** de esta cuenta son los que se deben usar para este proyecto? ¿Crear un proyecto nuevo en cada uno o reutilizar uno existente?
-**Por defecto:** crear proyecto nuevo `jmcakes` en Neon y en Railway (staging primero).
-**Respuesta:**
-
-**C-26 🟢 Presupuesto mensual de infraestructura** (Railway + Neon + dominio).
-**Por defecto:** planes de entrada (≈ US$5–25/mes en total al inicio).
-**Respuesta:**
-
-**C-11 🟢 Dominio:** ¿tienen uno? (ej. `jmcakes.com`; panel en `admin.jmcakes.com`)
-**Por defecto:** dominios gratuitos de Railway hasta tener uno propio.
-**Respuesta:**
-
-**C-12 🟡 Google Play:** ¿tienen cuenta de desarrollador? ¿Personal u organización? (Las cuentas **personales nuevas** deben hacer una **prueba cerrada con 12 testers durante 14 días** antes de publicar; las de **organización** requieren número D-U-N-S pero no tienen esa espera.) Confirma también los identificadores `com.jmcakes.cliente` y `com.jmcakes.delivery`.
-**Por defecto:** se asume cuenta personal y se planifican los 14 días de prueba cerrada.
-**Respuesta:**
-
-**C-28 🟢 Firebase:** ¿tienen una cuenta de Google para crear el proyecto de Firebase (notificaciones push)? Es gratuito; se necesita para descargar `google-services.json`.
-**Por defecto:** el humano lo crea durante F0 siguiendo los pasos que deje el agente; mientras tanto el push queda deshabilitado.
-**Respuesta:**
-
-**C-29 🟢 Ejecución:** ¿prefieres lanzar los 7 agentes de la Fase 1–2 todos a la vez, o por tandas (primero backend B1–B3, luego interfaces)? ¿Quieres que una sesión orquestadora los lance y vigile sus PRs automáticamente?
-**Por defecto:** por tandas, con revisión humana de cada PR antes del merge.
-**Respuesta:**
+| # | Pregunta | Valor por defecto |
+|---|---|---|
+| C-7 | Días de crédito y desde cuándo corren | 7 días por cliente, contados desde la fecha de entrega programada. |
+| C-23 | Deuda vencida | Bloquea pedidos si hay facturas vencidas hace más de 7 días. |
+| C-9 | Faltante en cocina | Solo el admin reduce el pedido antes de “Listo”; la diferencia vuelve a la billetera o reduce la deuda. |
+| C-14 | Métodos de pago y datos | Pago móvil Bs, transferencia Bs, Zelle, efectivo USD (se cargan en Configuración). |
+| C-16 | Costo de delivery | $0 (configurable). |
+| C-17 | Horario | Pedidos programables de 06:00 a 19:00; 60 min de anticipación mínima; hasta 30 días. |
+| C-19 | Mínimos | Mínimo por producto; sin mínimo por pedido. |
+| C-20 | Factura fiscal | No en v1. |
+| C-22 | Datos a migrar | Se importan por CSV cuando el dueño los entregue. |
+| C-24 | Varios administradores | Todos con control total. |
+| C-25 | Avisos por WhatsApp | No en v1 (solo botón “Escribir por WhatsApp”). |
+| C-11 | Dominio propio | Dominios de Railway hasta tener uno. |
+| C-12 | Cuenta de Google Play | Se asume personal (prueba cerrada de 12 testers × 14 días). |
+| C-28 | Firebase (push) | Lo crea el dueño; mientras tanto el push queda desactivado sin romper nada. |
+| C-30 | Auto-cancelación de pedidos impagos | A las 24 h (o antes de la hora programada), salvo que haya un pago en revisión. |
+| C-31 | Retiro en tienda (pickup) | No: todo es delivery en v1. |

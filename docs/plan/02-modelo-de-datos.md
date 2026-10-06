@@ -1,175 +1,175 @@
-# 02 — Modelo de datos
+# 02 — Modelo de datos (v2, convenciones OpenGravity)
 
-Esquema lógico para Postgres (Neon). El bloque **F0** lo implementa en Drizzle con migraciones. Los nombres de tablas y columnas van en inglés (`snake_case`); la interfaz en español.
+Lo implementa **FND** completo en la migración Alembic inicial. Los bloques siguientes **no crean tablas nuevas** salvo que lo pidan en su handoff (ver protocolo §4).
 
-Convenciones: `id uuid pk default gen_random_uuid()`, `created_at timestamptz default now()`, `updated_at timestamptz`. Montos en `*_cents bigint` en moneda base.
+## Convenciones
 
-## Identidad y acceso
+- Tablas en `snake_case` minúscula. Columnas en **camelCase** (nombre físico como primer argumento de `Column`). Atributos Python en `snake_case`.
+- `id` es `String` con cuid2. `createdAt` y `updatedAt` son `DateTime` naive UTC (`server_default=func.now()`).
+- Dinero: `Numeric(14,2)` en **USD** salvo que la columna diga lo contrario (`amountLocal`, cuentas en VES). Tasa: `Numeric(14,4)`.
+- Enums con `SQLEnum(X, name="X")`. Todas las FK llevan índice.
+- `CHECK` en BD para las invariantes baratas: billetera ≥ 0, montos > 0, `paidAmount ≤ amount`.
 
-### `users`
-| Columna | Tipo | Notas |
-|---|---|---|
-| id | uuid | |
-| role | enum `ADMIN \| PRODUCTION \| DELIVERY \| CUSTOMER` | |
-| phone | text unique | Formato E.164 (`+58414...`). Login principal. |
-| email | text unique null | Opcional. |
-| password_hash | text | argon2id |
-| full_name | text | |
-| status | enum `PENDING \| ACTIVE \| BLOCKED` | Clientes nuevos quedan `PENDING` hasta aprobación (ver cuestionario). |
-| last_login_at | timestamptz | |
+## Identidad
 
-### `refresh_tokens`
-`id, user_id, token_hash, expires_at, revoked_at, device_label`
-
-### `device_tokens`
-`id, user_id, fcm_token unique, platform ('android'), app ('cliente'|'delivery'), last_seen_at` — para push.
+| Tabla | Columnas clave |
+|---|---|
+| `users` | `id`, `role` (`UserRole`: ADMIN/PRODUCTION/DELIVERY/CUSTOMER), `phone` (único, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `lastLoginAt` |
+| `refresh_tokens` | `id`, `userId`, `tokenHash` (único), `expiresAt`, `revokedAt`, `deviceLabel` |
+| `device_tokens` | `id`, `userId`, `fcmToken` (único), `app` (`cliente`/`delivery`), `lastSeenAt` |
 
 ## Clientes
 
-### `customers` (1:1 con `users` de rol CUSTOMER; también existen clientes sin usuario creados por el admin, p. ej. de mostrador)
+**`customers`** — los crea el registro de la app (siempre `CASH`, sin aprobación) o el admin (con o sin usuario).
+
 | Columna | Tipo | Notas |
 |---|---|---|
-| id | uuid | |
-| user_id | uuid null fk | null = cliente sin app (solo backoffice). |
-| type | enum `RETAIL \| WHOLESALE` | Detal / mayorista. |
-| business_name | text null | Nombre del negocio del mayorista. |
-| contact_name | text | |
-| phone | text | |
-| rif_ci | text null | RIF o cédula. |
-| address_text | text | Dirección de entrega (texto libre). |
-| address_reference | text null | “Frente a la panadería X…” |
-| payment_mode | enum `CASH \| CREDIT` | **Contado** o **crédito**. Lo cambia solo el admin. |
-| credit_limit_cents | bigint default 0 | Solo aplica en `CREDIT`. |
-| credit_days | int default 7 | Días para considerar vencida una factura. |
-| wallet_balance_cents | bigint default 0 **check ≥ 0** | Caché del ledger; se actualiza en la misma transacción. |
-| price_list_id | uuid null | Para precios especiales por cliente (opcional, ver cuestionario). |
-| notes | text | |
-| is_active | bool | |
+| `userId` | String null único | null = cliente sin app (lo maneja solo el admin). |
+| `type` | `CustomerType` RETAIL/WHOLESALE | Detal o mayorista. Por defecto WHOLESALE al registrarse en la app. |
+| `segment` | `CustomerSegment` null | HOTDOG, BODEGA, CAFE_RESTAURANT, EVENTS, OTHER. |
+| `businessName`, `contactName`, `phone`, `idDocument` | String | `idDocument` = RIF o cédula (opcional). |
+| `addressText`, `addressReference` | String | Dirección de entrega en texto. |
+| `paymentMode` | `PaymentMode` CASH/CREDIT | **Default CASH.** Solo el admin lo cambia (con auditoría). |
+| `creditLimit` | Numeric default 0 | Solo aplica en CREDIT. |
+| `creditDays` | Integer default `credit.defaultDays` | |
+| `walletBalance` | Numeric default 0, **CHECK ≥ 0** | Caché del ledger; solo lo escribe `ledger.py`. |
+| `isBlocked`, `blockedReason` | | Bloqueado = no puede pedir. |
+| `notes` | | |
 
 ## Catálogo
 
-### `categories`
-`id, name, sort_order, is_active`
-
-### `products`
-| Columna | Tipo | Notas |
-|---|---|---|
-| id | uuid | |
-| category_id | uuid fk | |
-| name | text | “Canilla” |
-| description | text null | |
-| unit_label | text | “unidad”, “bolsa x10”, “docena” |
-| price_cents | bigint | Precio mayorista base. |
-| min_qty | int default 1 | Pedido mínimo por línea. |
-| image_key | text null | Clave en el bucket. |
-| is_published | bool | Visible en la app. |
-| is_available | bool | Agotado hoy (visible pero no pedible). |
-| sort_order | int | |
-
-### `price_history`
-`id, product_id, old_price_cents, new_price_cents, changed_by, changed_at` — auditoría de “subir y bajar precios”.
-
-### `price_lists` / `price_list_items` (opcional v1)
-Precios especiales por cliente: `price_list_items(price_list_id, product_id, price_cents)`.
+| Tabla | Columnas clave |
+|---|---|
+| `categories` | `name`, `sortOrder`, `isActive` |
+| `products` | `categoryId`, `name`, `description`, `unitLabel` (“unidad”, “bolsa x10”), `price` (USD), `minQty` (int ≥1), `imageFileId`, `isPublished`, `isAvailable` (agotado hoy), `sortOrder` |
+| `price_history` | `productId`, `oldPrice`, `newPrice`, `changedBy`, `batchId` (cambio masivo), `createdAt` |
 
 ## Pedidos
 
-### `orders`
+**`orders`**
+
 | Columna | Tipo | Notas |
 |---|---|---|
-| id | uuid | |
-| number | serial unique | Número corto visible: **#1042**. |
-| customer_id | uuid fk | |
-| created_by | uuid fk users | Cliente o admin. |
-| channel | enum `APP \| BACKOFFICE` | |
-| status | enum (ver [flujos](03-flujos-de-negocio.md)) | |
-| payment_mode | enum `CASH \| CREDIT` | Copiado del cliente al crear (snapshot). |
-| subtotal_cents, total_cents | bigint | |
-| delivery_address_text | text | Snapshot de la dirección. |
-| requested_delivery_date | date | Fecha de entrega (día de Caracas). |
-| notes | text null | |
-| assigned_driver_id | uuid null fk users | Se llena al pasar a `READY`. |
-| idempotency_key | text unique null | |
-| confirmed_at, preparing_at, ready_at, out_for_delivery_at, delivered_at, cancelled_at | timestamptz | Marcas de cada estado. |
-| cancel_reason | text null | |
+| `number` | Integer único (secuencia `order_number_seq`, empieza en 1001) | Visible: **#1042**. |
+| `customerId`, `createdByUserId` | | |
+| `channel` | `OrderChannel` APP/BACKOFFICE | |
+| `status` | `OrderStatus` | AWAITING_PAYMENT, CONFIRMED, PREPARING, READY, OUT_FOR_DELIVERY, DELIVERED, CANCELLED. |
+| `paymentMode` | `PaymentMode` | Copia del modo del cliente al crear. |
+| `paymentStatus` | `OrderPaymentStatus` | UNPAID, PARTIALLY_PAID, PAID, ON_CREDIT, REFUNDED. |
+| `fulfillmentType` | `FulfillmentType` ASAP/SCHEDULED | “Lo quiero hoy” o programado. |
+| `dueAt` | DateTime UTC | ASAP: el momento de la confirmación. SCHEDULED: fecha y hora elegidas. **Clave de orden en cocina.** |
+| `subtotal`, `deliveryFee`, `total` | Numeric | `total = subtotal + deliveryFee`. |
+| `paidFromWallet` | Numeric default 0 | Neto cobrado de la billetera (cargos − reembolsos). |
+| `roundingAdjustment` | Numeric default 0 | Diferencia ≤ tolerancia perdonada al confirmar (ver flujos §3.4). |
+| `deliveryAddressText`, `deliveryAddressReference`, `contactPhone` | | Copias al crear. |
+| `notes` | | |
+| `assignedDriverId` | String null | Se llena al pasar a READY. |
+| `idempotencyKey` | String(64) único null | |
+| `expiresAt` | DateTime null | Solo en AWAITING_PAYMENT; vencido → auto-cancelación. |
+| `confirmedAt`, `preparingAt`, `readyAt`, `outForDeliveryAt`, `deliveredAt`, `cancelledAt` | DateTime | |
+| `cancelReason`, `cancelledByUserId` | | |
 
-### `order_items`
-`id, order_id, product_id, product_name_snapshot, unit_label_snapshot, unit_price_cents, qty, line_total_cents`
+Índices: `(status, dueAt)`, `(customerId, createdAt)`, `(assignedDriverId, status)`.
 
-### `order_events`
-`id, order_id, from_status, to_status, actor_user_id, at, note` — bitácora de auditoría.
+| Tabla | Columnas clave |
+|---|---|
+| `order_items` | `orderId`, `productId`, `productName`, `unitLabel`, `unitPrice`, `qty`, `lineTotal` (copias del momento de la compra) |
+| `order_events` | `orderId`, `fromStatus`, `toStatus`, `actorUserId` (null = sistema), `note`, `createdAt` |
 
-## Finanzas
+## Pagos (modelo de OpenGravity adaptado)
 
-### `receivables` (cuentas por cobrar: una por pedido a crédito o cargo manual)
+**`payment_methods`** y **`bank_accounts`** — se copian de OpenGravity. Se agrega `bank_accounts.cashAccountId`, la cuenta del negocio donde entra el dinero. Son los “datos de pago” que ve el cliente.
+
+**`payments`**
+
 | Columna | Tipo | Notas |
 |---|---|---|
-| id | uuid | |
-| customer_id | uuid fk | |
-| source | enum `ORDER \| MANUAL` | |
-| order_id | uuid null unique | |
-| description | text | |
-| amount_cents | bigint | |
-| paid_cents | bigint default 0 | |
-| status | enum `OPEN \| PARTIAL \| PAID \| VOID` | |
-| issued_at | timestamptz | |
-| due_at | timestamptz | `issued_at + credit_days`. |
+| `idempotencyKey` | String(64) único | |
+| `customerId` | | |
+| `purpose` | `PaymentPurpose` ORDER/WALLET_TOPUP/MANUAL | MANUAL = abono que registra el admin. |
+| `orderId` | null | Pedido al que el cliente destina el pago (prioridad al aplicar). |
+| `paymentMethodId`, `bankAccountId` | | |
+| `amountLocal`, `localCurrency` (USD/VES) | Numeric, String | Lo que el cliente pagó, en su moneda. |
+| `bcvRateUsed` | Numeric(14,4) null | Tasa del día del pago (`paidOn`). Solo en VES. |
+| `amountUsd` | Numeric | `amountLocal` en USD, o `round(amountLocal / bcvRateUsed, 2)` en VES. El admin puede corregirlo al aprobar. |
+| `reference` | String | Número de referencia bancaria. |
+| `paidOn` | Date | Fecha del pago según el cliente. |
+| `senderName` | null | Titular que pagó (como OpenGravity). |
+| `proofFileId` | null | Comprobante (`files`). |
+| `status` | `PaymentStatus` | PENDING_REVIEW, IN_REVIEW, APPROVED, REJECTED, REVERSED. |
+| `reviewingAdminId`, `inReviewAt` | | “Tomar” un pago para revisarlo. |
+| `approvedBy`, `approvedAt`, `rejectionReason`, `reversedBy`, `reversedAt`, `reversalReason` | | |
 
-### `payments` (reportados por el cliente o registrados por el admin)
-| Columna | Tipo | Notas |
+Índice único **parcial**: `(paymentMethodId, reference)` donde `status IN ('PENDING_REVIEW','IN_REVIEW','APPROVED')`. Una referencia rechazada se puede volver a reportar.
+
+## Billetera del cliente y cuentas por cobrar
+
+**`wallet_movements`** — ledger **solo inserción**; lo escribe únicamente `services/ledger.py`.
+
+| Columna | Notas |
+|---|---|
+| `customerId` | |
+| `type` (`WalletMovementType`) | TOPUP_APPROVED (+), ORDER_CHARGE (−), RECEIVABLE_SETTLEMENT (−), ORDER_REFUND (+), PAYMENT_REVERSAL (−), ADJUSTMENT (±). |
+| `amount` | Con signo; nunca 0. |
+| `balanceAfter` | Saldo de la billetera tras el asiento. |
+| `paymentId`, `orderId`, `receivableId` | Referencias según el tipo. |
+| `createdByUserId` | null = sistema. |
+| `note` | Obligatoria en ADJUSTMENT. |
+
+**`receivables`** — cuentas por cobrar.
+
+| Columna | Notas |
+|---|---|
+| `customerId` | |
+| `source` (`ReceivableSource`) | ORDER (resto a crédito de un pedido), MANUAL (fiado de mostrador o cargo del admin), PAYMENT_REVERSAL (pago revertido sin saldo). |
+| `orderId` | Único, null. |
+| `description` | |
+| `amount`, `paidAmount` | `CHECK 0 ≤ paidAmount ≤ amount`. |
+| `status` (`ReceivableStatus`) | OPEN, PARTIAL, PAID, VOID. |
+| `issuedAt`, `dueAt` | |
+| `voidReason`, `voidedBy`, `voidedAt` | |
+
+## Cuentas del negocio (reutiliza `wallets` de OpenGravity con otro nombre)
+
+| Tabla | Columnas clave |
+|---|---|
+| `cash_accounts` | `name` (“Banesco Bs”, “Zelle”, “Efectivo USD”), `accountType`, `currency` USD/VES, `balance`, `isActive`, `displayOrder` |
+| `cash_account_transactions` | `cashAccountId`, `transactionType` (INCOME/EXPENSE/ADJUSTMENT), `amount` (en la moneda de la cuenta), `balanceAfter`, `referenceType`/`referenceId` (`payment`), `customerId`, `customerName`, `approvedBy`, `notes`, `metadata` (`exchange_rate`, `amount_usd`, `amount_ves`) |
+
+## Operación
+
+| Tabla | Origen | Notas |
 |---|---|---|
-| id | uuid | |
-| customer_id | uuid fk | |
-| order_id | uuid null | Si es pago de contado de un pedido específico. |
-| method | enum `PAGO_MOVIL \| TRANSFERENCIA \| ZELLE \| EFECTIVO_USD \| EFECTIVO_VES \| PUNTO_VENTA \| OTRO` | |
-| currency | enum `USD \| VES` | |
-| amount_original | numeric(14,2) | En la moneda reportada. |
-| exchange_rate | numeric(14,4) null | Tasa aplicada si `VES`. |
-| amount_cents | bigint | Equivalente en moneda base (se fija al aprobar). |
-| reference | text | Nº de referencia bancaria. **Unique por (method, reference)** para evitar doble reporte. |
-| paid_on | date | Fecha del pago según el cliente. |
-| proof_image_key | text null | Capture del comprobante. |
-| status | enum `PENDING \| APPROVED \| REJECTED` | |
-| reviewed_by, reviewed_at, reject_reason | | |
-| idempotency_key | text unique null | |
+| `exchange_rates` | **OpenGravity, tal cual** | `date`, `baseCurrency`, `targetCurrency`, `rateType` (BCV/MANUAL), `value`, `sourceUrl`, `fetchedAt`. |
+| `settings` | OpenGravity (clave–valor tipado + caché) | Claves abajo. |
+| `audit_logs` | OpenGravity | Precio, crédito, aprobación/rechazo/reverso de pagos, ajustes, anulaciones, bloqueos. |
+| `daily_closings` | OpenGravity (`closures`), métricas adaptadas | Una fila por día de Caracas; PDF. |
+| `files` | Nuevo | `key`, `contentType`, `sizeBytes`, `purpose` (PRODUCT_IMAGE/PAYMENT_PROOF), `ownerUserId`. |
 
-### `wallet_entries` (libro contable de la billetera — **solo inserción**)
-| Columna | Tipo | Notas |
+### Claves de `settings` (con su valor por defecto)
+
+| Clave | Default | Uso |
 |---|---|---|
-| id | uuid | |
-| customer_id | uuid fk | |
-| type | enum `PAYMENT_IN \| APPLIED_TO_RECEIVABLE \| ADJUSTMENT \| REFUND_OUT` | |
-| amount_cents | bigint | Positivo = entra a la billetera; negativo = sale. |
-| payment_id | uuid null | |
-| receivable_id | uuid null | |
-| balance_after_cents | bigint | Saldo resultante (facilita auditoría). |
-| created_by | uuid | |
-| note | text | |
+| `business.name` | “Panadería” | Nombre visible en todas las superficies. |
+| `business.phone` / `business.whatsapp` / `business.address` | vacío | |
+| `orders.openingTime` / `orders.closingTime` | 06:00 / 19:00 | Ventana válida para `dueAt` de los programados. |
+| `orders.minLeadMinutes` | 60 | Mínimo entre ahora y la hora programada. |
+| `orders.maxDaysAhead` | 30 | Máximo de días para programar. |
+| `orders.unpaidExpiryHours` | 24 | Vencimiento de AWAITING_PAYMENT (para programados: el menor entre esto y `dueAt − minLeadMinutes`). |
+| `delivery.feeUsd` | 0.00 | Costo de envío. |
+| `delivery.driverUserId` | null | El único motorizado. |
+| `credit.defaultDays` | 7 | |
+| `credit.blockOverdueDays` | 7 | Bloquea pedidos si hay deuda vencida hace más de N días. |
+| `payments.roundingToleranceUsd` | 0.01 | Diferencia por redondeo Bs↔USD que se perdona. |
+| `rates.manualOverride` | — | Lo maneja `exchange_rates` (tipo MANUAL), como en OpenGravity. |
 
-Invariante: `customers.wallet_balance_cents = SUM(wallet_entries.amount_cents)` y nunca negativo.
+## Invariantes (se prueban; ver [07-pruebas](07-pruebas.md))
 
-### `receivable_allocations`
-`id, receivable_id, wallet_entry_id, amount_cents, created_at` — qué parte de qué factura se pagó con qué movimiento.
-
-### `exchange_rates`
-`id, date (día de Caracas) unique, ves_per_usd numeric(14,4), source ('MANUAL'|'BCV'), created_by`
-
-## Configuración y operación
-
-### `settings` (clave–valor tipado)
-- `business.name`, `business.phone`
-- `orders.cutoff_time` (p. ej. `"18:00"` — pedidos después de esa hora pasan a la fecha siguiente)
-- `orders.allow_customer_cancel_until` (`CONFIRMED`)
-- `delivery.default_driver_id` (el único motorizado)
-- `credit.block_if_overdue_days` (bloquear pedidos si tiene facturas vencidas hace más de N días)
-- `currency.base` (`USD`)
-
-### `audit_log`
-`id, actor_user_id, action, entity, entity_id, before jsonb, after jsonb, at` — cambios de precio, crédito, aprobaciones de pago, ajustes manuales.
-
-## Índices clave
-- `orders(status, requested_delivery_date)` — cola de cocina.
-- `orders(assigned_driver_id, status)` — app del motorizado.
-- `receivables(customer_id, status, issued_at)` — aplicación FIFO.
-- `payments(status, created_at)` — bandeja de verificación.
-- `payments(method, reference)` unique.
+1. **I-1** `customers.walletBalance = Σ wallet_movements.amount ≥ 0`, y cada `balanceAfter` es correcto en secuencia.
+2. **I-2** `orders.paidFromWallet = −Σ(ORDER_CHARGE del pedido) − Σ(ORDER_REFUND del pedido)` (los cargos son negativos y los reembolsos positivos).
+3. **I-3** `receivables.paidAmount = −Σ(RECEIVABLE_SETTLEMENT de esa CxC)`. Al anular (VOID), lo pagado se devuelve a la billetera con un `ORDER_REFUND` que referencia la CxC y `paidAmount` queda como dato histórico.
+4. **I-4** Para todo pedido que no esté cancelado y haya pasado de AWAITING_PAYMENT: `total = paidFromWallet + amount de su CxC (si CREDIT) + roundingAdjustment`.
+5. **I-5** Pedido CANCELLED: `paidFromWallet = 0` y su CxC en VOID.
+6. **I-6** Conservación del dinero, por cliente: `walletBalance = Σ pagos aprobados − Σ reversos (lo debitado de billetera) + Σ ajustes (con signo) − Σ paidFromWallet (pedidos no cancelados) − Σ paidAmount (CxC no anuladas)`.
+7. **I-7** `cash_accounts.balance = Σ cash_account_transactions.amount`.
+8. **I-8** Un pedido solo es visible para cocina en CONFIRMED, PREPARING o READY.

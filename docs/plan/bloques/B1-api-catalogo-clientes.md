@@ -1,56 +1,49 @@
-# B1 — API: catálogo, clientes y configuración
+# B1 — API: catálogo, clientes, usuarios, configuración y archivos
 
-**Fase:** 1 (paralelo) · **Esfuerzo:** M · **Rama:** `block/B1-catalogo-clientes`
+**Fase 1** · **Rama** `block/B1` · Endpoints: [08](../08-api-endpoints.md) §B1
 
 ## Objetivo
-Que el administrador pueda **publicar productos, subir y bajar precios, gestionar clientes, aprobar registros y habilitar crédito**, y que la app del cliente pueda leer el catálogo.
-
-## Entradas
-- `main` con F0 fusionado; `docs/handoffs/F0.md`.
-- Contrato `contracts/openapi.yaml` (grupos `catalog`, `customers`, `settings`).
+El admin publica productos, sube y baja precios (también en masa), gestiona clientes y crédito, y usuarios internos. La app lee el catálogo y el perfil.
 
 ## Alcance
-1. **Categorías**: CRUD admin, orden, activar/desactivar.
-2. **Productos**: CRUD admin; publicar/ocultar; marcar agotado hoy (`is_available`); orden; pedido mínimo; unidad.
-3. **Precios**: cambio individual y **cambio masivo** (porcentaje o monto, por categoría o selección) con vista previa; cada cambio escribe `price_history` y `audit_log`.
-4. **Imágenes**: endpoint que entrega URL prefirmada de subida al bucket; validación de tipo/tamaño; URL pública/firmada para lectura; redimensionado opcional (miniatura).
-5. **Catálogo para el cliente**: solo productos publicados de categorías activas; precio resuelto por lista de precios del cliente si existe **[C-8]**.
-6. **Implementar `CatalogService.priceOrderLines`** (usado por B2): valida existencia, publicación, disponibilidad, `min_qty`, y devuelve precios snapshot.
-7. **Clientes (admin)**: listado con filtros (tipo, modo, estado, con deuda — la deuda la aporta B3 vía consulta), detalle, edición, creación de cliente sin app, **aprobar/rechazar registro**, cambiar **modo contado/crédito**, límite y días de crédito, bloquear/desbloquear. Push al cliente al aprobar (vía `Notifier`, stub hasta que B2 lo implemente).
-8. **Perfil del cliente (app)**: ver y editar sus datos permitidos (dirección, referencia, teléfono de contacto). No puede cambiar su modo ni límite.
-9. **Implementar `CustomersService`**.
-10. **Usuarios internos (admin)**: crear/editar usuarios de producción y delivery; resetear contraseña.
-11. **Settings**: lectura/edición tipada de las claves de `02-modelo-de-datos.md`, con validación.
+1. **Catálogo**
+   - CRUD de categorías y productos, con publicar/ocultar, disponible (agotado hoy), `minQty` y orden.
+   - `GET /catalog`: solo categorías activas y productos publicados, con los agotados marcados.
+2. **Cambio masivo de precios**
+   - `preview`: porcentaje o monto, por selección o por categoría, con redondeo opcional a 0.05 o 0.10. Devuelve un `previewToken` firmado (HMAC del contenido y TTL de 10 min).
+   - `apply`: verifica que el token coincida con el estado actual y escribe `price_history` con un `batchId` y `audit_logs`.
+3. **Implementar `CatalogService.price_lines`**: publicado, disponible y `qty ≥ minQty`, con los errores `PRODUCT_UNAVAILABLE` y `BELOW_MIN_QTY`, y `meta` del producto.
+4. **Archivos**
+   - Interfaz `Storage` con dos adaptadores:
+     - `S3Storage` (Railway Bucket, URL prefirmada PUT/GET);
+     - `LocalStorage` para dev y test, con endpoint PUT local.
+   - Validación de tipo (jpeg, png, webp, pdf) y tamaño (≤ 5 MB).
+   - Lectura: el cliente solo accede a sus propios comprobantes; el admin, a todo.
+5. **Clientes (admin)**
+   - Listado con filtros y búsqueda (nombre, negocio, teléfono, documento), con `pg_trgm` si conviene. Columnas de billetera y deuda vía `FinanceQueries` (stub hasta que llegue B3).
+   - Crear cliente sin app. Editar.
+   - `POST …/credit`: cambiar el modo, el límite y los días. Al pasar de CREDIT a CASH con deuda abierta, la deuda se mantiene. Con auditoría y push “Tienes crédito disponible”.
+   - Bloquear y desbloquear.
+6. **Perfil (cliente):** `GET` y `PATCH /me/profile`, sin acceso a modo ni crédito.
+7. **Usuarios internos**: ADMIN, PRODUCTION y DELIVERY. Crear, editar, desactivar y resetear contraseña. Implementar `CustomersService`.
+8. **Settings**
+   - `GET /settings/public` y `GET`/`PATCH /admin/settings`, con validación por clave (horas `HH:MM`, enteros con rango, dinero ≥ 0).
+   - `delivery.driverUserId` debe ser un usuario DELIVERY activo.
+9. `GET /admin/audit`.
 
-## Fuera de alcance
-Pedidos, pagos, billetera, dashboard (B2/B3). Interfaces web/Android.
+## No tocar
+Pedidos, dinero, eventos (B2 y B3); `db_models.py` (congelado); `web/` y `android/`.
 
-## Carpetas propias
-`api/src/modules/catalog`, `api/src/modules/customers`, `api/src/modules/settings`, `api/src/modules/users` y sus tests.
-
-## Limitantes
-- No modificar módulos de B2/B3; solo llamar sus interfaces.
-- Cambios al contrato o esquema solo aditivos y documentados.
-- Si no hay bucket configurado, usar un adaptador de almacenamiento local para dev/test (interfaz `Storage`).
-
-## Oportunidades
-- El cambio masivo de precios con **vista previa** es una función muy valorada en Venezuela (inflación): hacerla bien.
-- Búsqueda de clientes por nombre/teléfono/RIF con `ILIKE` + índice trigram (`pg_trgm`).
+## Pruebas exigidas
+- Cada endpoint con su rol válido.
+- Arnés de autorización ampliado: cliente A no puede leer a B; cocina y delivery no ven `/admin/*`.
+- Cambio masivo:
+  - el `preview` coincide con el `apply`;
+  - un token vencido o alterado se rechaza;
+  - queda el historial.
+- `price_lines`: casos de no publicado, agotado y bajo el mínimo.
+- Storage local de punta a punta.
+- Settings: validaciones.
 
 ## Definición de terminado
-- Tests de cada endpoint (autorización por rol incluida: un cliente no puede ver otro cliente; producción/delivery no acceden a precios de admin).
-- Test de contrato verde.
-- Desplegado en staging; handoff con ejemplos `curl`.
-
-## Siguiente
-Desbloquea pantallas reales de catálogo/clientes en **W1** y **M1**; habilita a **B2** a usar precios reales.
-
-## Prompt para lanzar este bloque
-```
-Eres el agente del bloque B1 del proyecto JM Cakes (repo edicsonbtos/jmcakes).
-Lee CLAUDE.md, docs/plan/, docs/plan/bloques/B1-api-catalogo-clientes.md,
-docs/handoffs/F0.md y docs/CUESTIONARIO.md. Implementa todo el alcance de B1
-solo dentro de tus carpetas, siguiendo docs/plan/05-protocolo-agentes.md
-(rama block/B1-catalogo-clientes, CI verde, handoff docs/handoffs/B1.md,
-STATUS.md). Otros agentes trabajan en paralelo en B2 y B3: no toques sus módulos.
-```
+Ver protocolo §6. El handoff lleva ejemplos `curl` de cada endpoint.

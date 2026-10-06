@@ -1,21 +1,55 @@
 # CLAUDE.md — reglas para agentes en este repositorio
 
-Proyecto **JM Cakes**: plataforma para una panadería en Caracas (admin web, cocina web, app Android cliente, app Android delivery). Lee `README.md` y `docs/plan/` antes de cualquier cambio.
+Proyecto: plataforma de una **panadería en Caracas**. Superficies:
+- **API:** FastAPI.
+- **Web:** Next.js 16, con el panel `/admin` y la cocina `/cocina`.
+- **Android:** app del cliente y app del motorizado.
+
+Reutiliza **OpenGravity** (`/home/user/opengraviti` en el entorno de agentes). Antes de cualquier cambio, leer `README.md`, `PRODUCT.md` y `docs/plan/`.
 
 ## Reglas de oro
-1. **Trabaja solo en tu bloque.** Tu ficha está en `docs/plan/bloques/<ID>-*.md`; respeta sus carpetas propias. Protocolo completo: `docs/plan/05-protocolo-agentes.md`.
-2. **Contrato primero.** `contracts/openapi.yaml` es la fuente de verdad. Cambios solo aditivos; los que rompen compatibilidad se piden en el handoff.
-3. **Dinero = centavos enteros + ledger.** Nunca `float`; nunca editar saldos fuera del módulo de finanzas.
-4. **Hora de Caracas** (`America/Caracas`) para todo “día”, reporte o texto visible. Usa los helpers de `api/src/lib/time.ts`.
-5. **Español de Venezuela** en toda interfaz y mensaje de error visible.
-6. **Sin sobreingeniería:** un motorizado, sin mapas ni rutas, un backend, una base de datos.
-7. **Sin secretos en el repo.** Variables nuevas → `.env.example`.
-8. Al terminar: tests y CI verdes, `docs/handoffs/<ID>.md`, fila actualizada en `docs/plan/STATUS.md`, PR hacia `main`.
-9. Preguntas del negocio sin responder → usa el valor por defecto de `docs/CUESTIONARIO.md` y anótalo.
-10. Acciones destructivas en Neon/Railway/producción → confirmar con el humano.
+1. **Trabaja solo en tu bloque.**
+   - Tu ficha está en `docs/plan/bloques/`; respeta sus carpetas propias.
+   - Protocolo: `docs/plan/05-protocolo-agentes.md`.
+   - Archivos congelados: ver el protocolo, §3.
+2. **Copiar antes que inventar.**
+   - Si OpenGravity ya lo resolvió (pagos, tasa BCV, billeteras, auditoría, cierres, panel), copia y adapta según `docs/plan/06-reutilizacion-opengravity.md`.
+   - Al copiar, deja la línea `# Adaptado de OpenGravity: <ruta>`.
+3. **Dinero:**
+   - `Decimal` y `Numeric(14,2)` en USD; en JSON, string decimal. Nunca `float` ni `Double`.
+   - Toda escritura de saldo pasa por `api/src/services/ledger.py`, con `SELECT … FOR UPDATE` y `balanceAfter`.
+   - Las reglas exactas están en `docs/plan/03-flujos-de-negocio.md`. La referencia ejecutable es `spec/money_model.py`: si hay duda, manda el modelo.
+4. **Tiempo:**
+   - Columnas `DateTime` naive en UTC (`to_utc_naive`).
+   - El “día” se calcula en `America/Caracas` (`get_today_caracas`, `as_caracas_date`).
+   - Nunca `.date()` sobre un UTC crudo.
+5. **Contrato:** `contracts/openapi.json` se **genera** desde la API, no se edita a mano. Web y Android no inventan campos.
+6. **BD:**
+   - Tablas en snake_case y columnas en camelCase; IDs String (cuid2); `SQLEnum(..., name="X")`.
+   - Solo Alembic migra; nunca `create_all` en Postgres ni `DROP` sin autorización.
+7. **Español de Venezuela** en toda la interfaz y en los mensajes de error. El cliente muestra el `detail` de la API tal cual.
+8. **UI:** carga la skill **impeccable** y sigue `DESIGN.md`. Nombre del negocio desde la configuración (`business.name`), nunca fijo en el código.
+9. **Sin sobreingeniería:** un motorizado, sin mapas ni rutas, una API, una base de datos.
+10. **Sin secretos en el repo.** Las variables nuevas van a `.env.example`. Este repositorio es **público**.
+11. **Pruebas:**
+    - Todo cambio de comportamiento lleva su prueba.
+    - Toda prueba de dinero verifica saldos **y** asientos (`assert_money_invariants`).
+12. **Cambios quirúrgicos:** en archivos existentes usa `Edit` puntual, no reescrituras completas.
+13. **Acciones destructivas** en Neon, Railway o producción: confirmar con el humano.
+    - Neon: proyecto `jmcakes` (`square-poetry-91370020`) de la org personal. **Nunca** `Finanzas_CAPS`.
 
 ## Comandos
-> F0 completa esta sección con los comandos reales (instalar, test, lint, mock, migraciones, build Android).
+> FND completa esta sección con los comandos reales.
 
-## Entorno de la nube
-- Node 22 y pnpm disponibles. Java 21 y Gradle disponibles. **Sin Android SDK ni KVM**: compila Android en GitHub Actions o instala `cmdline-tools` si la red lo permite.
+```bash
+python -m pytest spec -q          # modelo ejecutable de las reglas de dinero
+```
+
+## Entorno de la nube (verificado el 2026-10-06)
+- **Lenguajes y Android:**
+  - Python 3.11, Node 22, Java 21 y Gradle disponibles.
+  - **Sin Android SDK ni KVM** (`dl.google.com` bloqueado): Android se compila en GitHub Actions.
+- **Base de datos:**
+  - PostgreSQL 16 local: `service postgresql start`, luego `su postgres -c psql`.
+  - **Sin salida a Neon:5432**: usa el MCP de Neon; las migraciones en Neon las aplica Railway (`preDeployCommand`).
+- **Red:** npm, PyPI, Maven Central, `maven.google.com` y el portal de plugins de Gradle están accesibles.

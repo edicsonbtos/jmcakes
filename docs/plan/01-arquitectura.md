@@ -1,113 +1,130 @@
-# 01 — Arquitectura y stack
+# 01 — Arquitectura y stack (v2: reutiliza OpenGravity)
 
 ## Vista general
 
 ```
-                    ┌──────────────────────────────────────────┐
-                    │              Railway (hosting)            │
- App Android        │                                           │
- Cliente  ──HTTPS──▶│  api  (Node 22 + Fastify + TypeScript)    │──▶ Neon Postgres
- (Play Store)       │   ├─ REST /v1  (contrato OpenAPI)         │     (main / staging / ramas por PR)
-                    │   ├─ SSE  /v1/events  (cocina, admin)     │
- App Android        │   ├─ FCM  (push a cliente y motorizado)   │──▶ Firebase Cloud Messaging
- Delivery ──HTTPS──▶│   └─ subida de imágenes                   │──▶ Railway Bucket (S3)
- (APK)              │                                           │
-                    │  web  (React + Vite, estático)            │
- Navegador ────────▶│   ├─ /admin    → Administrador            │
- (PC / tablet)      │   └─ /cocina   → Producción               │
-                    └──────────────────────────────────────────┘
+App Android Cliente ─┐                      ┌──────────── Railway · proyecto "jmcakes" ────────────┐
+(Play Store)         │  HTTPS (Bearer JWT)  │                                                       │
+App Android Delivery ┼─────────────────────▶│  api  · FastAPI + SQLAlchemy 2 async + Alembic        │──▶ Neon Postgres
+(APK)                │                      │       · REST /api/v1  (OpenAPI generado)              │    proyecto "jmcakes"
+                     │                      │       · SSE  /api/v1/events (cocina, admin)           │    ramas: main · staging
+Navegador ───────────┘                      │       · APScheduler: tasa BCV 06:00, cierre 23:50,    │
+ /admin  (admin)        cookie authToken    │         auto-cancelación de impagos                   │──▶ FCM (push)
+ /cocina (producción) ─────────────────────▶│  web  · Next.js 16 + Tailwind 4 (panel + cocina)      │──▶ Railway Bucket (fotos,
+                                            └───────────────────────────────────────────────────────┘    comprobantes)
 ```
 
-Un solo backend (`api`), una sola base de datos, una sola web con dos áreas por rol, dos apps Android que comparten un módulo `core`.
+## Stack
 
-## Stack elegido y por qué
-
-| Capa | Elección | Motivo |
+| Capa | Elección | De dónde viene |
 |---|---|---|
-| Base de datos | **Neon Postgres** | Experiencia previa del dueño; **ramas** por PR/staging gratis; MCP disponible para que los agentes migren y consulten. |
-| Hosting | **Railway** | Experiencia previa; MCP disponible; despliegue desde GitHub; buckets S3 nativos. |
-| API | **Node.js 22 + TypeScript + Fastify** | Rápido, tipado, mismo lenguaje que la web; ecosistema que los agentes dominan. |
-| ORM / migraciones | **Drizzle ORM + drizzle-kit** | SQL explícito, migraciones versionadas en el repo, tipado end-to-end. |
-| Validación | **Zod** | Mismo esquema para validar requests y tipar. |
-| Contrato | **OpenAPI 3.1** escrito a mano en `contracts/openapi.yaml` | *Contract-first*: permite que web y Android avancen en paralelo contra un **mock** (Prism) antes de que exista la API. |
-| Tiempo real web | **Server-Sent Events (SSE)** | Más simple que WebSockets, pasa por el proxy de Railway, suficiente para “nuevo pedido”. |
-| Push móvil | **Firebase Cloud Messaging** | Estándar en Android; notificación aunque la app esté cerrada. |
-| Imágenes | **Railway Bucket** (S3-compatible) | Sin otro proveedor; URLs prefirmadas. |
-| Web | **React 19 + Vite + TypeScript + TanStack Router/Query + Tailwind + shadcn/ui** | SPA estática barata de servir; componentes listos para backoffice. Cliente tipado generado del contrato (`openapi-typescript` + `openapi-fetch`). |
-| Android | **Kotlin 2 + Jetpack Compose + Material 3 + Hilt + Retrofit/OkHttp + kotlinx.serialization + DataStore + Coil** | Stack moderno estándar; un proyecto Gradle con módulos `:core`, `:app-cliente`, `:app-delivery`. `minSdk 24` (teléfonos económicos comunes en Venezuela). |
-| Tests | Vitest (API/web), Playwright (E2E web), JUnit + Robolectric + Compose UI test (Android, sin emulador) | Todo corre en CI y en contenedores sin KVM. |
-| CI | **GitHub Actions** | Los runners `ubuntu-latest` traen Android SDK: los agentes en la nube compilan Android ahí aunque su contenedor no tenga SDK. |
+| API | **Python 3.11+ · FastAPI · SQLAlchemy 2.0 async · psycopg 3 · Pydantic v2** | Igual que `apps/bot` de OpenGravity (sin Telegram). |
+| Migraciones | **Alembic**, único ejecutor en producción (`preDeployCommand = "alembic upgrade head"`). | OpenGravity. **No usamos Prisma.** |
+| Jobs | **APScheduler** dentro del proceso FastAPI (lifespan), envoltorio `_safe_job` con sesión propia y commit/rollback. | Patrón de `jobs-programados-opengravity`, sin PTB. |
+| Tests API | **pytest + pytest-asyncio (strict)** contra **PostgreSQL 16 local** (en el contenedor y en CI como *service*), sesión con savepoint por test. | Fixtures de OpenGravity, adaptadas a Postgres (para que `FOR UPDATE` sea real). |
+| Contrato | **OpenAPI generado por FastAPI**, exportado a `contracts/openapi.json` con `scripts/export_openapi.py`. Esquemas Pydantic definidos en F0 = contrato. Mock: **Prism** sobre ese archivo. | — |
+| Web | **Next.js 16** (App Router, `src/proxy.ts` como middleware, cookie `authToken`), **Tailwind 4**, `lucide-react`, `recharts`, Vitest. **Leer `node_modules/next/dist/docs/` antes de escribir código.** | `apps/web` de OpenGravity. |
+| Android | **Kotlin 2 · Jetpack Compose · Material 3 · Hilt · Retrofit + OkHttp + kotlinx.serialization · DataStore · Coil · FCM**. Un proyecto Gradle: `:core:designsystem`, `:core:network`, `:core:data`, `:app-cliente`, `:app-delivery`. `minSdk 24`. | Nuevo. |
+| Diseño | **Impeccable** (`.claude/skills/impeccable`) → `PRODUCT.md`, `DESIGN.md` y tokens compartidos web/Android. | Skill de OpenGravity. |
+| Hosting | Railway: servicios `api` (rootDirectory `api/`) y `web` (rootDirectory `web/`), entorno `staging`; luego `production`. | Igual que OpenGravity. |
+| BD | Neon `jmcakes` (org personal `org-dawn-bar-06119989`, **nunca** `Finanzas_CAPS`), región aws-us-east-1, PG 17, BD `panaderia`. | — |
+| Archivos | Railway Bucket (S3), URL prefirmada. Adaptador local en dev/test. | Nuevo (OpenGravity usaba Telegram/Drive). |
 
-## Estructura del repositorio (monorepo)
+## Estructura del repositorio
 
 ```
 jmcakes/
-├─ CLAUDE.md                  # reglas para cualquier agente que trabaje aquí
-├─ contracts/
-│  └─ openapi.yaml            # FUENTE DE VERDAD de la API
-├─ api/                       # backend Fastify
+├─ PRODUCT.md · DESIGN.md            # Impeccable (producto y sistema visual)
+├─ CLAUDE.md                         # reglas para agentes
+├─ contracts/openapi.json            # generado desde la API (fuente de verdad del contrato)
+├─ api/                              # FastAPI (dueña de TODA la lógica de negocio)
+│  ├─ alembic/ · alembic.ini · railway.toml · requirements.txt · pytest.ini
 │  ├─ src/
-│  │  ├─ modules/
-│  │  │  ├─ auth/             # F0
-│  │  │  ├─ catalog/          # B1
-│  │  │  ├─ customers/        # B1
-│  │  │  ├─ settings/         # B1
-│  │  │  ├─ orders/           # B2
-│  │  │  ├─ kitchen/          # B2
-│  │  │  ├─ delivery/         # B2
-│  │  │  ├─ notifications/    # B2 (SSE + FCM)
-│  │  │  ├─ finance/          # B3 (billetera, CxC, pagos)
-│  │  │  └─ dashboard/        # B3
-│  │  ├─ db/                  # schema Drizzle + migraciones (F0; cambios vía PR con nota)
-│  │  └─ lib/                 # tiempo, dinero, errores, rbac (F0)
-│  └─ test/
-├─ web/                       # React + Vite
-│  └─ src/
-│     ├─ app/admin/           # W1
-│     ├─ app/cocina/          # W2
-│     └─ shared/              # F0 (layout, auth, cliente API)
-├─ android/                   # proyecto Gradle
-│  ├─ core/                   # F0 (red, sesión, DTOs, tema)
-│  ├─ app-cliente/            # M1
-│  └─ app-delivery/           # M2
-├─ docs/
-│  ├─ plan/                   # este plan
-│  ├─ handoffs/               # notas de entrega de cada bloque
-│  └─ CUESTIONARIO.md
-└─ .github/workflows/         # CI por carpeta (api, web, android)
+│  │  ├─ main.py · config.py
+│  │  ├─ core/        (exceptions, logging, security/jwt, encryption)        ← OpenGravity
+│  │  ├─ db/          (base, session, models_registry, types)               ← OpenGravity
+│  │  ├─ utils/       (date_utils: Caracas, to_utc_naive)                    ← OpenGravity
+│  │  ├─ domain/<x>/  (db_models · schemas · repository · service)           ← patrón OpenGravity
+│  │  │   auth · users · customers · catalog · settings · orders · kitchen · delivery
+│  │  │   payments · payment_methods · wallet · receivables · cash_accounts
+│  │  │   exchange_rates · audit · closures · dashboard · notifications · files
+│  │  ├─ api/v1/      (un router por dominio: SOLO valida y delega al service)
+│  │  ├─ services/    (ledger.py: TODA escritura de dinero; events.py: bus SSE; push.py: FCM)
+│  │  └─ jobs/        (bcv_sync · daily_closing · unpaid_auto_cancel)
+│  └─ tests/
+├─ web/                              # Next.js 16
+│  └─ src/app/(admin)/admin/… · src/app/(cocina)/cocina/… · src/app/login · src/components/ui · src/lib
+├─ android/                          # Gradle multi-módulo
+├─ spec/                             # modelo ejecutable de las reglas de dinero (ver 07-pruebas)
+├─ docs/plan · docs/design · docs/handoffs · docs/CUESTIONARIO.md
+└─ .github/workflows/                # api.yml · web.yml · android.yml · contract.yml
 ```
 
-**Regla de propiedad:** cada bloque solo escribe en sus carpetas. Así siete agentes pueden trabajar en paralelo sin conflictos de merge.
+## Convenciones heredadas de OpenGravity (obligatorias)
 
-## Decisiones transversales
+1. **Capas:** el router valida y delega; el `service` orquesta y hace `commit`/`rollback`; el `repository` hace `flush()`, **nunca** `commit()`.
+2. **Dinero:**
+   - `Numeric(14,2)` con `Decimal` en Python, nunca `float`. Tasa `Numeric(14,4)`.
+   - En JSON el dinero viaja como **string decimal** (`"12.50"`). Android lo lee con `BigDecimal`.
+3. **Toda escritura de dinero pasa por `services/ledger.py`.**
+   - Ningún service toca `walletBalance` ni `balance` directamente.
+   - Bloqueo **`SELECT … FOR UPDATE`** del cliente o cuenta antes de mover saldo.
+   - Cada asiento guarda `balanceAfter`.
+4. **USD/VES:** los montos llegan al ledger en USD. Si el pago registró importe local (`amountLocal` y `bcvRateUsed`), ese manda. Nunca se reconvierte dos veces.
+5. **Fechas:**
+   - Columnas `DateTime` **naive en UTC**; persistir con `to_utc_naive()`.
+   - Lógica de “día” con `get_today_caracas()` / `as_caracas_date()`.
+   - Nunca `.date()` sobre un UTC crudo.
+6. **BD:**
+   - Tablas en `snake_case` minúscula; columnas en **camelCase** (nombre físico como primer argumento de `Column`).
+   - IDs `String` (cuid2).
+   - Los `SQLEnum` llevan `name=` explícito.
+   - Registro único de modelos en `src/db/models_registry.py`, usado por alembic, tests y session.
+7. **Errores:**
+   - `HTTPException(detail="mensaje para el usuario")` en español, o `AppError` con `code`.
+   - El cliente muestra `detail` tal cual.
+   - Formato: `{"detail": "...", "code": "CREDIT_LIMIT_EXCEEDED", "meta": {...}}`.
+8. **Web:**
+   - Cliente delgado: **no calcula** dinero ni estados.
+   - Vistas operativas con `cache: 'no-store'`.
+   - Fechas con `timeZone: "America/Caracas"`.
+   - IDs string; filtros y paginación del lado del servidor.
+9. **Idempotencia:** header `Idempotency-Key` en crear pedido y reportar pago (columna `idempotencyKey` única).
+10. **Cambios quirúrgicos:** `Edit`, no reescrituras, sobre archivos existentes (skill `cambios-quirurgicos`).
 
-### Dinero
-- Todo monto se guarda en **centavos enteros** (`bigint`) en la **moneda base** (USD por defecto, ver cuestionario). Nunca `float`.
-- Los pagos en bolívares guardan `monto_ves`, `tasa_aplicada` y el equivalente en moneda base, calculado al aprobar.
-- Tasa del día: tabla `exchange_rates` que el admin carga (o se automatiza luego con BCV).
+## Autenticación
 
-### Tiempo
-- En BD: `timestamptz` (UTC).
-- “Día de negocio” = día calendario en `America/Caracas`. Helpers únicos en `api/src/lib/time.ts` (`startOfBusinessDay`, `businessDate(ts)`). Prohibido calcular “hoy” con la zona del servidor.
-- La web y las apps muestran siempre en hora de Caracas, independientemente de la zona del dispositivo.
+- `users` con `role` ∈ {ADMIN, PRODUCTION, DELIVERY, CUSTOMER}. Login por **teléfono** (E.164 `+58…`) + contraseña (bcrypt, como OpenGravity).
+- Access JWT HS256 de 30 min, con `sub`, `role` y `cid` (customerId). Refresh rotativo de 30 días, guardado hasheado.
+- **Web:**
+  - La Server Action de login guarda la cookie `authToken` (httpOnly).
+  - `src/proxy.ts` la verifica con `jose`. Las rutas `/admin/*` requieren ADMIN y `/cocina` requiere PRODUCTION o ADMIN.
+  - Las peticiones del navegador a la API llevan `Authorization: Bearer`, con el token obtenido vía `/api/auth/me` como en OpenGravity.
+- **Android:** Bearer más refresh automático en un interceptor de OkHttp.
+- **SSE:**
+  - El navegador no manda headers con `EventSource`, así que primero pide un token de stream de corta vida (`POST /api/v1/events/token`, 60 s, un solo uso).
+  - Luego abre `GET /api/v1/events?token=…`. Heartbeat cada 20 s y `Last-Event-ID` para reanudar.
 
-### Seguridad
-- Contraseñas con **argon2id**. Access token JWT 15 min + refresh token rotativo 30 días (guardado hasheado).
-- RBAC por ruta: `requireRole('ADMIN')`, etc. Un cliente solo ve sus propios datos (chequeo de propiedad en cada consulta).
-- Cocina **no ve montos** de dinero; el motorizado solo ve nombre, dirección, teléfono, items y monto a cobrar si aplica.
-- Rate limit en login y registro. CORS limitado al dominio web.
-- Secretos solo en variables de Railway / GitHub Secrets. Nunca en el repo.
+## Tiempo real y push
 
-### Entornos
-| Entorno | API | Web | BD |
-|---|---|---|---|
-| Local / CI | localhost | localhost | Postgres en contenedor de CI |
-| PR preview (opcional) | Railway PR env | Railway PR env | Rama Neon por PR |
-| Staging | `api-staging` | `web-staging` | Rama Neon `staging` |
-| Producción | `api` | `web` | Rama Neon `main` |
+- **Bus de eventos:**
+  - En memoria por proceso (Railway con 1 réplica) detrás de la interfaz `EventBus`.
+  - Si se escala, se cambia a Postgres `LISTEN/NOTIFY` sin tocar a los consumidores.
+  - Los eventos se emiten **después del commit**: `session.info["after_commit"]`.
+- **Push FCM:**
+  - Adaptador `PushSender`. Sin credenciales (`FCM_CREDENTIALS_JSON` vacío) solo registra en el log, sin fallar.
+  - Tokens inválidos se borran.
 
-### Errores y API
-- Formato de error único: `{ "error": { "code": "CREDIT_LIMIT_EXCEEDED", "message": "texto para el usuario", "details": {} } }`.
-- Versionado en ruta: `/v1/...`.
-- Paginación por cursor: `?cursor=&limit=`.
-- Idempotencia en creación de pedidos y reportes de pago: header `Idempotency-Key` (las conexiones móviles en Venezuela fallan y reintentan).
+## Entornos
+
+| Entorno | API | Web | BD | Despliegue |
+|---|---|---|---|---|
+| Local / tests | uvicorn :8000 | next dev :3000 | Postgres 16 local | — |
+| CI (GitHub Actions) | pytest con Postgres como servicio | build + lint + vitest | servicio `postgres:16` | en cada push a la rama de integración |
+| **staging** | Railway `api` | Railway `web` | Neon rama `staging` | auto desde la rama de integración |
+| production | Railway | Railway | Neon rama `main` | tras la aprobación del dueño |
+
+**Restricciones de red del entorno de agentes (verificadas el 2026-10-06):**
+- **Neon (puerto 5432):** no hay salida. Se maneja por el MCP de Neon, y las migraciones las aplica el `preDeployCommand` de Railway.
+- **`dl.google.com`:** bloqueado, así que no se puede instalar el Android SDK en el contenedor. Android se compila en GitHub Actions.
+- **Sí accesibles:** `maven.google.com`, Maven Central, Gradle plugins, npm y PyPI.

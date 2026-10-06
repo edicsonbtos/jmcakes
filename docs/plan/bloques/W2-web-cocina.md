@@ -1,50 +1,39 @@
-# W2 — Web de producción (cocina)
+# W2 — Web: pantalla de producción (cocina)
 
-**Fase:** 2 (paralelo) · **Esfuerzo:** S · **Rama:** `block/W2-web-cocina`
-
-## Decisión: web en tablet, no app Android
-La cocina usa la misma web (`/cocina`) en una **tablet o TV con navegador**, fija en esa pantalla. Ventajas: cero instalación, se actualiza sola, reutiliza autenticación y SSE, una app menos que mantener. (Ver cuestionario **[C-10]** si se prefiere app.)
+**Fase 1** · **Rama** `block/W2` · Diseño: `DESIGN.md` y `docs/design/cocina.md` · Skill: `impeccable`
 
 ## Objetivo
-Que cuando un cliente pida, en cocina **suene y aparezca** “Nueva orden #1042 — Pedro Pérez” con sus productos, y que con un toque se marque **Listo**.
+En una tablet o TV de pared, legible a 2 metros: **qué hacer, para cuándo y en qué cantidad**. Un pedido nuevo **suena y se ve**; “Listo” es un toque.
 
-## Entradas
-- F0 (`useEventStream`, layout pantalla completa, login por rol `PRODUCTION`).
-- Handoff de B2 para pasar del mock a staging.
+## Alcance (`/cocina`)
+1. **Hoy**
+   - Columnas **Nuevos · Preparando · Listos**, ordenadas por `dueAt`.
+   - Tarjetas grandes con:
+     - **#número** y cliente o negocio;
+     - **hora grande**, con el chip “Para ya” (ASAP) o “Programado 3:00 pm”;
+     - **“Atrasado”** si corresponde;
+     - productos y cantidades en tipografía grande;
+     - notas resaltadas.
+2. **Programados:** pedidos de días futuros, agrupados con la **fecha en grande** (“JUEVES 9 OCT”). Se pueden empezar antes (Preparando).
+3. **Total a producir:** selector Hoy, Mañana o fecha → tabla de producto y cantidad.
+4. **Tiempo real**
+   - `useEventStream` (DSN) con `order.confirmed`, `order.updated` y `order.cancelled`.
+   - Al reconectar, recarga completa.
+   - Banner “Sin conexión”.
+5. **Alerta:** botón inicial “Activar sonido” (política de autoplay). Sonido repetido y tarjeta resaltada hasta tocarla (“visto”, guardado localmente).
+6. **Acciones**
+   - **Preparando** y **Listo**, con un “Deshacer” de 5 s antes de enviar.
+   - Pedido cancelado: tarjeta en rojo “CANCELADO” hasta confirmarla.
+7. **PWA y pantalla:** PWA instalable (manifest e ícono), Wake Lock y modo pantalla completa. **Cero montos de dinero.**
 
-## Alcance
-1. Tablero de pantalla completa: columnas **Nuevos · Preparando · Listos hoy**; tarjetas grandes legibles a 2 metros (número, cliente/negocio, hora, productos y cantidades en tipografía grande, notas resaltadas).
-2. **Alerta**: sonido repetido + tarjeta parpadeando hasta que alguien la toque (“visto”). Botón para activar el audio al iniciar (los navegadores bloquean audio sin interacción).
-3. Botones grandes **Preparando** (opcional) y **Listo** con opción de deshacer por 5 s.
-4. Pedido cancelado: la tarjeta se marca en rojo “CANCELADO” y desaparece tras confirmarlo.
-5. Pestaña **Total a producir** por fecha (hoy/mañana): producto → cantidad total.
-6. Selector de fecha de entrega (hoy / mañana) **[C-6]**.
-7. Robustez: reconexión automática SSE, recarga completa al reconectar, indicador “Sin conexión”, *Wake Lock* para que la pantalla no se apague, PWA instalable (manifest + ícono) para abrir a pantalla completa.
-8. Sin montos de dinero.
+## Contra qué construir
+Mock de Prism para REST. **Prism no emite SSE**, así que se agrega un simulador de eventos solo en desarrollo (`?simular=1`). Q1 conecta con la API real.
 
-## Fuera de alcance
-Gestión de pedidos (crear/editar/cancelar), finanzas.
+## Pruebas exigidas
+- Vitest del agrupado Hoy/Programados con zona Caracas (pedido de las 23:30).
+- Playwright: el evento simulado aparece en Nuevos; Listo con deshacer; vista de Programados con fecha grande.
+- Capturas en tablet horizontal (1280×800) y TV (1920×1080) en `docs/handoffs/assets/W2-*.png`.
+- `impeccable detect` sin críticos.
 
-## Carpetas propias
-`web/src/app/cocina/**` y sus tests.
-
-## Limitantes
-- Solo usuarios con rol `PRODUCTION` (o `ADMIN`).
-- El mock de Prism no emite SSE: simular eventos con un generador local en modo desarrollo hasta tener B2 en staging.
-
-## Oportunidades
-- Muy poco código y alto impacto visible: buen candidato para la primera demo al dueño.
-- Test Playwright que simula evento SSE y verifica sonido/tarjeta.
-
-## Definición de terminado
-- Funciona contra staging: crear pedido por API → aparece en < 2 s en `/cocina` → “Listo” → el pedido aparece asignado al motorizado.
-- Capturas y video corto (Playwright) en el handoff.
-
-## Prompt para lanzar este bloque
-```
-Eres el agente del bloque W2 del proyecto JM Cakes (repo edicsonbtos/jmcakes).
-Lee CLAUDE.md, docs/plan/, docs/plan/bloques/W2-web-cocina.md, docs/handoffs/
-(F0 y B2 si existe) y docs/CUESTIONARIO.md. Construye la pantalla de cocina en
-web/src/app/cocina siguiendo docs/plan/05-protocolo-agentes.md (rama
-block/W2-web-cocina, CI verde, handoff docs/handoffs/W2.md, STATUS.md).
-```
+## No tocar
+`src/app/(admin)`, `src/components/ui` y `src/lib` (solo aditivo y declarado), `api/`, `android/`.

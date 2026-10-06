@@ -1,52 +1,58 @@
-# 00 — Visión y alcance
+# 00 — Visión, alcance y decisiones del dueño
 
-## Problema
-
-La panadería vende a dos tipos de clientes y hoy no tiene un sistema que conecte la venta, la producción, el despacho y la cobranza:
-
-- **Clientes del negocio (detal / mostrador)**: compran en el local; algunos compran fiado y generan cuentas por cobrar.
-- **Clientes mayoristas**: compran volumen (canillas, panes, etc.); algunos pagan de contado y otros tienen **línea de crédito**.
+> Plan **v2**. Incorpora las respuestas del dueño del 2026-10-06 y la decisión de **reutilizar OpenGravity** (su sistema de préstamos en producción) en vez de reinventar el manejo de dinero. Producto descrito para diseño en [`PRODUCT.md`](../../PRODUCT.md).
 
 ## Objetivo
 
-Una plataforma única donde:
+Plataforma para una panadería en Caracas con cuatro roles:
 
-1. El **cliente mayorista** pide desde una app Android sencilla.
-2. El pedido llega al instante a **producción** (“Nueva orden — Pedro Pérez: 4 canillas, 5 panes…”), como en las apps de delivery.
-3. Cuando producción marca **Listo**, el pedido se asigna automáticamente al **único motorizado**, que solo marca **En camino** y **Entregado**.
-4. El **administrador** controla todo desde la web: catálogo y precios, clientes, crédito, billeteras, cuentas por cobrar, pagos y dashboards del día.
+| Rol | Superficie | Qué hace |
+|---|---|---|
+| **Administrador** | Web `/admin` | Control total: clientes, catálogo y precios, crédito, billeteras, **aprobación manual de pagos**, cuentas por cobrar, dashboards, cierres diarios. |
+| **Producción** | Web `/cocina` (tablet/TV) | Cola en vivo de pedidos confirmados (“Hoy” y “Programados” con la fecha en grande), **Preparando** y **Listo**. |
+| **Motorizado** | App Android (APK) | Recibe automáticamente los pedidos listos; **En camino** y **Entregado**. |
+| **Cliente mayorista** | App Android (Play Store) | Registro sin aprobación, catálogo, pedido para hoy o programado, pago con billetera o reporte de pago, seguimiento, crédito si el admin lo habilita. |
 
-## Principios (no negociables)
+## Decisiones confirmadas por el dueño
 
-- **Sin sobreingeniería.** Un solo motorizado, sin rutas, sin mapas, sin aceptación de pedidos. Un solo backend, una sola base de datos, una sola web.
-- **Sencillo e intuitivo** para el cliente: pocas pantallas, botones grandes, español de Venezuela.
-- **El dinero es un libro contable (ledger).** Nunca se edita un saldo a mano; todo movimiento es un asiento trazable.
-- **Hora de Caracas** (`America/Caracas`, UTC−4, sin horario de verano) para todo lo que el usuario ve: “día”, cierres, reportes.
-- **Construido por agentes de IA autónomos** en bloques independientes, con un contrato de API como fuente de verdad.
+| # | Decisión |
+|---|---|
+| D-1 | **Precios en USD** y se muestran también en **Bs a tasa BCV**. Lógica de tasa de OpenGravity: la manual del día manda; luego la fila BCV del día; luego DolarAPI; luego la última conocida. |
+| D-2 | **Registro sin aprobación.** Todo cliente nuevo queda en modo **contado** (`CASH`). El admin puede habilitar **crédito** (`CREDIT`) con límite y días. |
+| D-3 | **Pedidos programados:** “Lo quiero hoy” (lo antes posible) o **fecha y hora** personalizadas. Producción los ve en cola con la **fecha en grande**. |
+| D-4 | **Contado:** paga al terminar el pedido en la misma app. Si la billetera alcanza, **se descuenta sin preguntar**. Si no alcanza, **usa el saldo y pide la diferencia**: muestra los datos de pago y pide número de referencia y comprobante. |
+| D-5 | El pedido de contado **entra a cocina al aprobar el pago**. Si el pago se rechaza o el pedido se cancela, lo descontado vuelve a la billetera. |
+| D-6 | **Cada pago se aprueba manualmente**, como en OpenGravity (`PENDING_REVIEW` → `IN_REVIEW` → `APPROVED`/`REJECTED`, y `REVERSED` para revertir). |
+| D-7 | **Billetera recargable:** el cliente reporta un pago de recarga; al aprobarse suma saldo; el saldo paga pedidos y deudas automáticamente. |
+| D-8 | Crear proyectos **nuevos** en Neon y Railway (hecho: Neon `jmcakes` en la org personal, Railway `jmcakes`, entorno `staging`). |
+| D-9 | Ejecución con un **enjambre de 10 agentes** por fases, con pruebas, y el plan **auditado dos veces** antes de ejecutar. |
+| D-10 | Diseño definido con la skill **Impeccable** (copiada de OpenGravity a `.claude/skills/impeccable`). |
+| D-11 | Nombre comercial **no definido**: “Panadería” por defecto y configurable (`business.name`), logo reemplazable. |
+| D-12 | Clientes típicos: perros calienteros, bodegas y abastos, cafeterías y restaurantes, eventos y particulares. |
 
-## Alcance v1 (MVP)
+## Alcance v1
 
 | Módulo | Incluido |
 |---|---|
-| Autenticación y roles | Admin, Producción, Delivery, Cliente. JWT + refresh. |
-| Catálogo | Categorías, productos con foto, precio, unidad, pedido mínimo, publicar/ocultar, subir/bajar precios. |
-| Clientes | Tipos detal y mayorista; aprobación de registros; modo **contado** o **crédito**; límite de crédito; bloqueo. |
-| Pedidos | Crear desde la app (o desde la web por el admin), máquina de estados, cancelación. |
-| Producción | Cola en tiempo real con alerta sonora, “Preparando” (opcional) y “Listo”. |
-| Delivery | Auto-asignación, lista de pedidos con cliente/dirección/teléfono, “En camino”, “Entregado”. |
-| Finanzas | Billetera por cliente, cuentas por cobrar (facturas por pedido), reporte de pagos desde la app, verificación por el admin, aplicación automática billetera → deuda (FIFO), cargos y abonos manuales. |
-| Dashboards | Ingresos del día, ventas del día, CxC total y por tipo de cliente, deudores, pedidos por estado, productos más vendidos. |
-| Notificaciones | Push (FCM) a cliente y motorizado; tiempo real (SSE) a cocina y admin. |
+| Auth y roles | ADMIN, PRODUCTION, DELIVERY, CUSTOMER. Teléfono + contraseña. JWT (patrón de OpenGravity) + refresh. |
+| Catálogo | Categorías, productos con foto, precio USD, unidad, mínimo por producto, publicar/ocultar, agotado hoy, **cambio masivo de precios** con vista previa, historial. |
+| Clientes | Registro libre (contado). Admin: crédito (límite, días), bloqueo, creación de clientes sin app, ficha con estado de cuenta. |
+| Pedidos | “Hoy” o programado (fecha+hora), repetir pedido, cancelar, máquina de estados, creación por el admin. |
+| Pagos | Métodos de pago y cuentas bancarias de OpenGravity, reporte con referencia + comprobante, aprobación/rechazo/reverso manual, idempotencia, referencia única. |
+| Billetera y CxC | Billetera del cliente (ledger solo-inserción), pago automático de pedidos y deudas, cuentas por cobrar de crédito con vencimiento, cargos y abonos manuales. |
+| Cuentas del negocio | Saldos por cuenta real de cobro (Banco Bs, Zelle, efectivo) reutilizando las “wallets” de OpenGravity. |
+| Producción | Tablero en vivo (SSE) con sonido, Hoy / Programados, “Total a producir” por día. |
+| Delivery | Auto-asignación al único motorizado, En camino / Entregado, llamar / WhatsApp / abrir dirección en Maps (texto). |
+| Dashboard y cierres | Ingresos del día por método/cuenta, ventas, CxC, pagos por verificar, top productos, **cierre diario** con PDF (de OpenGravity). |
+| Tasa | Sincronización BCV diaria (06:00) y tasa manual del admin (de OpenGravity). |
+| Notificaciones | Push FCM (cliente y motorizado); SSE (cocina y admin). |
 
 ## Fuera de alcance v1
+Mapas y rutas, varios motorizados, pasarela de pago automática, facturación fiscal, inventario y recetas, POS de mostrador, iOS, bot de Telegram.
 
-- Rutas, mapas, GPS, tracking en vivo, múltiples motorizados.
-- Pasarela de pago automática (los pagos se reportan y el admin los verifica).
-- Facturación fiscal SENIAT / máquina fiscal.
-- Inventario de materia prima y recetas (costeo).
-- App iOS.
-- Punto de venta (POS) completo de mostrador (ver cuestionario: se puede agregar un registro simple de ventas de mostrador).
-
-## Métrica de éxito del MVP
-
-Un pedido de un mayorista con crédito recorre **app → cocina → motorizado → entregado** y su deuda aparece en CxC; al reportar y aprobarse un pago, la deuda baja sola. Todo esto visible en el dashboard del día en hora de Caracas.
+## Métrica de éxito
+Recorridos verificados por pruebas end-to-end (ver [07-pruebas](07-pruebas.md)):
+1. Contado con billetera suficiente: el pedido llega a cocina sin intervención del admin.
+2. Contado con billetera parcial: reporte de la diferencia → aprobación → cocina → listo → motorizado → entregado.
+3. Crédito: pedido confirmado al instante → deuda → recarga aprobada → deuda saldada y sobrante en billetera.
+4. Pedido programado para dentro de 3 días: visible en cocina con la fecha en grande; entra a “Hoy” el día que toca.

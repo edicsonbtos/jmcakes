@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+.venv/
+venv/
+*.sqlite3
+# Node / Next
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+# Android
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
+google-services.json
+# Secretos
+.env
+.env.*
+!.env.example
+# Impeccable / herramientas locales
+.impeccable/live/
+graphify-out/

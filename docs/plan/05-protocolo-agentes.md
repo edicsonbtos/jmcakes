@@ -1,86 +1,63 @@
-# 05 — Protocolo de trabajo entre agentes
+# 05 — Protocolo de trabajo del enjambre
 
-Reglas que todo agente sigue para que los bloques encajen sin supervisión constante.
+## 1. Al empezar (cada agente)
+1. Leer `CLAUDE.md`, `PRODUCT.md`, `docs/plan/00`–`08`, la ficha propia en `docs/plan/bloques/` y los handoffs existentes en `docs/handoffs/`.
+2. Si la tarea toca dinero, leer `spec/money_model.py` y `.claude/skills/contabilidad-panaderia` (si existe; si no, `/home/user/opengraviti/.agents/skills/contabilidad-opengravity/SKILL.md`).
+3. Si la tarea toca UI, cargar la skill **impeccable** y seguir `DESIGN.md`.
+4. Crear la rama de trabajo **en el worktree**: `git checkout -b block/<ID>`.
 
-## 1. Antes de empezar
+## 2. Git: ramas, commits e integración
+- Cada agente trabaja en su **worktree aislado**, en `block/<ID>`, creada desde el estado integrado de la fase anterior.
+- Commits pequeños y descriptivos, en español, con el prefijo `[<ID>]`. Terminan con las líneas de atribución que indique el orquestador.
+- **Los agentes no hacen push.** El orquestador:
+  1. revisa `git diff --stat` contra las carpetas propias de la ficha;
+  2. integra con `git merge --no-ff block/<ID>` en `claude/happy-johnson-24innr`;
+  3. corre las compuertas;
+  4. hace push.
+- Nunca reescribir historia ajena, ni hacer `--force`, ni borrar ramas de otros.
 
-1. Leer `CLAUDE.md`, `docs/plan/00`–`05`, la ficha de su bloque y las **notas de entrega** (`docs/handoffs/*.md`) de los bloques de los que depende.
-2. Leer `docs/CUESTIONARIO.md`: usar las respuestas; si una pregunta que le afecta sigue sin responder, usar el **valor por defecto** indicado y dejarlo anotado en su handoff.
-3. Marcar su bloque como `EN CURSO` en `docs/plan/STATUS.md` (en su rama).
+## 3. Propiedad de archivos
+- Solo se escribe en las **carpetas propias** de la ficha. Lectura libre.
+- **Archivos compartidos congelados después de FND:** `api/src/main.py`, `api/src/db/models_registry.py`, `api/src/config.py`, `api/src/core/**`, `api/src/domain/*/db_models.py`, `api/src/domain/*/interface.py`, `api/src/domain/*/schemas.py`, `web/src/lib/**`, `web/src/components/ui/**`, `web/src/app/globals.css`, `DESIGN.md`.
+  - Se permiten **cambios aditivos mínimos**: agregar un campo opcional a un esquema, un setting nuevo o un método a un componente sin romper sus props. Cada uno se declara en el handoff, en “Cambios a compartidos”.
+  - Los cambios que **rompen** (renombrar o quitar campos, cambiar semánticas o estados) no se hacen. Se piden en el handoff, en “Solicitudes de cambio”, y los resuelve Q1.
+- Excepción: `api/src/domain/<dominio>/schemas.py` lo puede ampliar el bloque dueño de ese dominio, sin quitar campos.
 
-## 2. Ramas y PRs
+## 4. Migraciones (Alembic)
+- FND crea la revisión inicial con todo el esquema.
+- Un bloque de la Fase 1 que necesite un cambio de esquema crea **una** revisión, con nombre `<ID>_<descripcion>` y `down_revision = <cabeza de FND>`. Debe ser idempotente: inspector y `IF NOT EXISTS`, según `migraciones-esquema-opengravity`.
+- El orquestador fusiona las cabezas con `alembic merge heads` al integrar.
+- Prohibido editar una migración ya integrada, `create_all` en Postgres, o un `DROP` sin autorización.
 
-- Rama: `block/<ID>-<slug>` (p. ej. `block/B2-pedidos`) creada desde `main` actualizado.
-- Un PR por bloque hacia `main` (si el bloque es grande, PRs incrementales `block/B2-pedidos-1`, `-2`…).
-- El PR debe pasar CI. Título: `[B2] API de pedidos, cocina y delivery`.
-- Nunca hacer push a `main` directamente. Nunca reescribir la historia de la rama de otro bloque.
+## 5. Contrato
+- `contracts/openapi.json` **se genera** (`python api/scripts/export_openapi.py`), nunca se edita a mano.
+- B1–B3 pueden regenerarlo en su rama. Al integrar, el orquestador lo regenera de nuevo; en caso de conflicto, se resuelve regenerando.
+- W1, W2 y M consumen el contrato. Si les falta un campo, lo piden en el handoff y no lo inventan. Mientras tanto usan el mock y, si hace falta, un *fixture* local marcado `TODO(contrato)`.
 
-## 3. Propiedad de carpetas
+## 6. Definición de terminado (todo agente)
+- [ ] Alcance de la ficha completo, o cada punto diferido explicado en el handoff.
+- [ ] Pruebas nuevas verdes en el worktree: `pytest` (api), `npm run build && npm run lint && npm test` (web) o tests JVM escritos (android).
+- [ ] Sin secretos en el código; variables nuevas en `.env.example`.
+- [ ] Textos en español de Venezuela; horas en `America/Caracas`; dinero en string decimal en la API.
+- [ ] `docs/handoffs/<ID>.md` con la plantilla del §7.
+- [ ] La fila propia de `docs/plan/STATUS.md` marcada `LISTO PARA INTEGRAR`.
+- [ ] Commit final en `block/<ID>`. Respuesta final al orquestador con: rama, SHA, resumen, pruebas ejecutadas y su resultado, pendientes.
 
-- Cada bloque **solo modifica** las carpetas listadas en su ficha.
-- Archivos compartidos (`contracts/openapi.yaml`, `api/src/db/schema/*`, `web/src/shared/*`, `android/core/*`, `package.json` raíz, workflows de CI): se permite **cambio aditivo** (agregar un endpoint, una columna nullable, una dependencia) con estas condiciones:
-  - Se explica en la sección “Cambios a archivos compartidos” del handoff y del PR.
-  - Las migraciones nuevas se crean con `drizzle-kit generate` (nunca se edita una migración ya fusionada).
-  - **Cambios que rompen** (renombrar/eliminar campos o endpoints, cambiar estados) **no se hacen**: se anotan como “Solicitud de cambio de contrato” en el handoff para que Q1 o el humano decidan.
-
-## 4. Contrato primero
-
-- Si el bloque necesita un endpoint que no existe en `openapi.yaml`, primero lo agrega al contrato (cambio aditivo), luego lo implementa.
-- La API valida en tests que sus respuestas cumplen el contrato (`api/test/contract.test.ts`, creado en F0).
-- La web y Android generan/ajustan tipos desde el contrato, nunca inventan campos.
-
-## 5. Definición de terminado (común a todos)
-
-- [ ] Todo el alcance de la ficha implementado o explícitamente diferido en el handoff.
-- [ ] Tests nuevos pasando; CI verde.
-- [ ] Lint y typecheck limpios.
-- [ ] Sin secretos en el código; variables nuevas documentadas en `.env.example`.
-- [ ] Textos de interfaz en español (Venezuela); horas en `America/Caracas`.
-- [ ] `docs/handoffs/<ID>.md` escrito (plantilla abajo).
-- [ ] `docs/plan/STATUS.md` actualizado a `LISTO PARA REVISIÓN`.
-- [ ] PR abierto con resumen y checklist.
-
-## 6. Plantilla de nota de entrega (`docs/handoffs/<ID>.md`)
-
+## 7. Plantilla de handoff (`docs/handoffs/<ID>.md`)
 ```md
-# Handoff <ID> — <nombre del bloque>
-
-## Qué quedó hecho
-- …
-
-## Cómo probarlo
-- Comandos, URLs de staging, usuarios de prueba (sin contraseñas reales).
-
+# Handoff <ID> — <nombre>
+## Hecho
+## Cómo probar (comandos exactos y resultado obtenido)
 ## Endpoints / pantallas entregados
-- …
-
-## Cambios a archivos compartidos
-- contrato: …   · esquema/migraciones: …   · dependencias: …
-
-## Decisiones tomadas por defecto (preguntas del cuestionario sin responder)
-- C-n: se usó <valor> porque …
-
+## Cambios a compartidos (aditivos)
+## Decisiones por defecto tomadas (preguntas del cuestionario sin respuesta)
 ## Pendiente / diferido
-- …
-
-## Solicitudes de cambio de contrato (rompen compatibilidad)
-- …
-
-## Qué necesita el siguiente bloque
-- Para <ID>: …
+## Solicitudes de cambio (rompen compatibilidad)
+## Para el siguiente bloque
 ```
 
-## 7. Cómo un bloque “enlaza” con el siguiente
-
-1. El agente termina, deja el handoff y abre el PR.
-2. El humano (o un agente revisor) hace merge.
-3. El siguiente bloque, al iniciar, lee el handoff del anterior: ahí encuentra exactamente qué quedó, cómo probarlo y qué le toca.
-4. Los bloques de interfaz (W/M) que estaban usando el mock cambian la URL base a staging cuando el handoff del bloque backend correspondiente dice “desplegado en staging”.
-
-Opcional — orquestación automática: una sesión “orquestadora” puede lanzar los bloques con `create_session` (Claude Code remoto), pasar el prompt de cada ficha, y vigilar sus PRs; lanza la siguiente fase cuando todos los PRs de la anterior están fusionados.
-
-## 8. Qué hacer si se bloquea
-
-- Falta un dato del negocio → usar el valor por defecto del cuestionario y anotarlo.
-- Falta una credencial (Firebase, Railway, Neon, keystore) → dejar la integración detrás de una variable de entorno con un *fallback* inofensivo (p. ej. push deshabilitado que solo registra en log) y anotarlo como pendiente para el humano.
-- Otro bloque no ha entregado algo que necesita → usar el stub/mock y anotarlo; no implementar el módulo ajeno.
+## 8. Si un agente se bloquea
+- **Falta un dato del negocio:** usar el valor por defecto de `docs/CUESTIONARIO.md` y anotarlo.
+- **Falta una credencial** (FCM, bucket, SMTP): usar el adaptador nulo o local y anotarlo.
+- **Falta algo de otro bloque:** usar el stub o el mock; nunca implementar el módulo ajeno.
+- **Duda que cambia dinero o estados:** detenerse en ese punto, dejar una prueba `xfail(strict=True)` que documente el caso y reportarlo. No improvisar reglas de dinero.

@@ -17,6 +17,7 @@
 | W1 | — | `WEB_PORT=3001`, `MOCK_PORT=4011` |
 | W2 | — | `WEB_PORT=3002`, `MOCK_PORT=4012` |
 | Q1 | `panaderia_test_q1`, `panaderia_e2e` | API 8020, web 3020 |
+| Q2 | — | — |
 
    - Conexión: `TEST_DATABASE_URL=postgresql+psycopg://dev:dev@127.0.0.1:5432/<base>`. El conftest crea la base si no existe.
    - Postgres: `service postgresql start`. Si falta el rol `dev`, crearlo con `su postgres -c "psql -c \"CREATE ROLE dev LOGIN SUPERUSER PASSWORD 'dev'\""`. `scripts/dev-setup.sh` (FND) hace todo esto.
@@ -25,7 +26,7 @@
 - Cada agente trabaja en su **worktree aislado**, en la rama `block/<ID>`, creada desde el estado integrado más reciente.
 - Commits pequeños en español con el prefijo `[<ID>]`, terminados con las líneas de atribución que indique el orquestador.
 - **Los agentes NO hacen push ni abren PR.** El orquestador:
-  1. revisa `git diff --stat claude/happy-johnson-24innr...block/<ID>` contra las carpetas propias;
+  1. revisa `git diff --stat claude/happy-johnson-24innr...block/<ID>` contra las carpetas propias. También se permiten `docs/handoffs/<ID>.md`, la revisión Alembic propia (`*_<id>_*.py`) y los cambios aditivos **declarados** en el handoff;
   2. integra con `git merge --no-ff` en `claude/happy-johnson-24innr`;
   3. corre las compuertas;
   4. publica.
@@ -53,8 +54,8 @@
 
 ## 5. Contrato y tipos
 - `contracts/openapi.json` **se genera**: `cd api && python scripts/export_openapi.py`.
-  - B1, B2 y B3 lo regeneran en su rama.
-  - Al integrar, el orquestador lo regenera; un conflicto se resuelve regenerando.
+  - B1, B2 y B3 **no lo commitean**: lo exportan solo para verificar en local.
+  - El orquestador lo regenera y lo commitea tras cada integración.
 - `web/src/lib/api-types.ts` lo genera **solo el orquestador** (`npm run gen:api`), en G1 y G2. W1 y W2 no lo regeneran.
 - W1, W2 y M consumen el contrato. Si les falta algo, lo piden en el handoff; mientras tanto usan un fixture local marcado `TODO(contrato)`.
 

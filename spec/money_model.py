@@ -140,6 +140,7 @@ class Payment:
     method: str
     reference: str
     order_id: int | None = None
+    bank_account: str = "BANCO-1"
     status: PS = PS.PENDING_REVIEW
 
 
@@ -377,10 +378,11 @@ class Shop:
 
     # ---------- pagos (§3.3–§3.7) ----------
     def report_payment(self, cid: int, amount_usd: str, reference: str, method: str = "PAGO_MOVIL",
-                       order_id: int | None = None) -> Payment:
+                       order_id: int | None = None, bank_account: str = "BANCO-1") -> Payment:
         if q(amount_usd) <= ZERO:
             raise DomainError("INVALID_AMOUNT")
-        if any(p.method == method and p.reference == reference and p.status in REFERENCE_LOCKING
+        # R2-M8: la referencia es única por cuenta destino (no por método)
+        if any(p.bank_account == bank_account and p.reference == reference and p.status in REFERENCE_LOCKING
                for p in self.payments.values()):
             raise DomainError("DUPLICATE_REFERENCE")
         if order_id is not None:  # la API toma FOR UPDATE del pedido aquí (M10)
@@ -388,7 +390,7 @@ class Shop:
             if o.customer_id != cid or o.status != OS.AWAITING_PAYMENT:
                 raise DomainError("ORDER_NOT_PAYABLE")
         p = Payment(id=next(self._ids), customer_id=cid, amount_usd=q(amount_usd), method=method,
-                    reference=reference, order_id=order_id)
+                    reference=reference, order_id=order_id, bank_account=bank_account)
         self.payments[p.id] = p
         return p
 
@@ -404,16 +406,22 @@ class Shop:
         self._move(c, "TOPUP_APPROVED", p.amount_usd, payment_id=p.id)
         p.status = PS.APPROVED
         self.settle(c.id, priority=p.order_id)
+        self._extend_pay_window(p.order_id)
+
+    def _extend_pay_window(self, order_id: int | None) -> None:
+        """OrdersService.extend_pay_window: tras rechazo o aprobación insuficiente."""
+        if order_id is None:
+            return
+        o = self.orders[order_id]
+        if o.status == OS.AWAITING_PAYMENT and o.expires_at is not None:
+            o.expires_at = max(o.expires_at, self.now + self.min_pay_window)
 
     def reject(self, pid: int) -> None:
         p = self.payments[pid]
         if p.status not in (PS.PENDING_REVIEW, PS.IN_REVIEW):
             raise DomainError("PAYMENT_NOT_REVIEWABLE")
         p.status = PS.REJECTED
-        if p.order_id is not None:  # §3.6: el cliente conserva una ventana para reportar otro
-            o = self.orders[p.order_id]
-            if o.status == OS.AWAITING_PAYMENT and o.expires_at is not None:
-                o.expires_at = max(o.expires_at, self.now + self.min_pay_window)
+        self._extend_pay_window(p.order_id)  # §3.6: ventana para reportar otro pago
 
     def reverse(self, pid: int) -> None:
         p = self.payments[pid]
@@ -489,6 +497,14 @@ class Shop:
     # ---------- settle §3.5 ----------
     def settle(self, cid: int, priority: int | None = None) -> None:
         c = self.customers[cid]
+        has_debt = any(r.customer_id == cid and r.status in (RS.OPEN, RS.PARTIAL) for r in self.receivables.values())
+        if c.mode == Mode.CASH and has_debt:   # R2-M5: un cliente de contado salda su deuda antes que sus pedidos
+            self._settle_receivables(c)
+        self._settle_orders(c, priority)
+        self._settle_receivables(c)
+
+    def _settle_orders(self, c: Customer, priority: int | None) -> None:
+        cid = c.id
         if not c.blocked:  # M9: nunca se confirman pedidos de un cliente bloqueado
             awaiting = sorted((o for o in self.orders.values()
                                if o.customer_id == cid and o.status == OS.AWAITING_PAYMENT),
@@ -506,6 +522,9 @@ class Shop:
                     self._confirm(o)
                 else:
                     o.payment_status = "PARTIALLY_PAID"
+
+    def _settle_receivables(self, c: Customer) -> None:
+        cid = c.id
         recs = sorted((r for r in self.receivables.values()
                        if r.customer_id == cid and r.status in (RS.OPEN, RS.PARTIAL)),
                       key=lambda r: (r.due_at, r.issued_at, r.id))

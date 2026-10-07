@@ -14,8 +14,9 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 ## Identidad
 | Tabla | Columnas clave |
 |---|---|
-| `users` | `role` (`UserRole`: ADMIN, PRODUCTION, DELIVERY, CUSTOMER), `phone` (único, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `lastLoginAt` |
-| `refresh_tokens` | `userId`, `tokenHash` (único), `expiresAt`, `revokedAt`, `deviceLabel` |
+| `users` | `role` (`UserRole`: ADMIN, PRODUCTION, DELIVERY, CUSTOMER), `phone` (`uq_users_phone` → `PHONE_TAKEN`, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `lastLoginAt` |
+| `refresh_tokens` | `userId`, `tokenHash` (único), `expiresAt`, `revokedAt`, `rotatedAt`, `replacedById`, `deviceLabel` (gracia de rotación de 60 s, 08) |
+| `idempotency_records` | `scope` (p. ej. `admin.payout`), `key`, `requestHash`, `responseJson`, `createdAt`; único `(scope, key)`. Para operaciones de admin sin tabla propia con llave (cargos, ajustes, devoluciones). |
 | `device_tokens` | `userId`, `fcmToken` (único), `app` (`cliente`/`delivery`), `lastSeenAt` |
 
 ## Clientes — `customers`
@@ -70,10 +71,9 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 | `order_items` | `orderId`, `productId`, `productName`, `unitLabel`, `unitPrice`, `qty`, `lineTotal` |
 | `order_events` | `orderId`, `fromStatus`, `toStatus`, `actorUserId` (null = sistema), `note`, `createdAt` |
 
-**Quién escribe qué en `orders`:**
-- **B3** (`MoneyService` y `ledger`): `paidFromWallet`, `roundingAdjustment`, `paymentStatus` y la CxC.
-- **B2:** todo lo demás (`status`, `*At`, `expiresAt`, `dueAt`, `assignedDriverId`, `order_events`), además de eventos y push.
-- La confirmación por pago la ejecuta B2 (`OrdersService.confirm_paid`), invocada por B3.
+**Quién escribe qué en `orders`** (igual que en 08):
+- **B3** (`MoneyService` y `ledger`): `paidFromWallet`, `roundingAdjustment`, `paymentStatus`, **`expiresAt`** y la CxC.
+- **B2:** `status`, `*At`, `dueAt`, `assignedDriverId`, `order_events`, eventos y push. `confirm_paid` (B2, invocado por B3) limpia `expiresAt`.
 
 ## Pagos
 **`payment_methods`** y **`bank_accounts`**: modelos de OpenGravity, con `bank_accounts.cashAccountId` (FK) agregado.
@@ -96,7 +96,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 | `reviewingAdminId`, `inReviewAt`, `approvedBy`, `approvedAt`, `rejectionReason`, `reversedBy`, `reversedAt`, `reversalReason` | |
 | `correctedFrom` | JSON null: valores originales si el admin corrigió el monto o la tasa. |
 
-**`uq_payments_method_reference_live`**: único `(paymentMethodId, reference)` `WHERE status <> 'REJECTED'`. Solo un rechazo libera la referencia.
+**`uq_payments_bank_account_reference_live`**: único `(bankAccountId, reference)` `WHERE status <> 'REJECTED' AND reference IS NOT NULL`. La transferencia la identifican la cuenta destino y la referencia; solo un rechazo libera la referencia.
 
 Prohibido el borrado físico de pagos: no se copia el `DELETE /payments/{id}` de OpenGravity.
 
@@ -114,7 +114,10 @@ Prohibido el borrado físico de pagos: no se copia el `DELETE /payments/{id}` de
 | WALLET_PAYOUT | − | `cashAccountTransactionId` |
 | ADJUSTMENT | ± | `note` obligatoria |
 
-Otras columnas: `amount` (≠ 0), `balanceAfter`, `createdByUserId`, `createdAt`.
+Otras columnas:
+- **`seq`** BigInteger: secuencia `wallet_movements_seq`, única. Es el **orden canónico** del ledger para invariantes, estado de cuenta y cursor; `id` (cuid2) y `createdAt` no sirven para ordenar.
+- `amount` (≠ 0), `balanceAfter`, `createdByUserId`, `cashAccountTransactionId` (en WALLET_PAYOUT).
+- `createdAt`, asignado en Python con `to_utc_naive(utcnow())`. **No** usar `server_default=func.now()`, que en Postgres repite la hora de inicio de la transacción.
 
 **`receivables`**
 
@@ -135,7 +138,7 @@ Otras columnas: `amount` (≠ 0), `balanceAfter`, `createdByUserId`, `createdAt`
 | Tabla | Columnas clave |
 |---|---|
 | `cash_accounts` | `name`, `accountType`, `currency` (USD/VES), `balance`, `isActive`, `displayOrder` |
-| `cash_account_transactions` | `cashAccountId`, `transactionType` (INCOME/EXPENSE/ADJUSTMENT), **`amount` CON SIGNO** en la moneda de la cuenta (INCOME > 0, EXPENSE < 0, ADJUSTMENT ≠ 0), `balanceAfter`, `referenceType`/`referenceId` (`payment`, `payout`), `customerId`, `customerName`, `approvedBy`, `notes`, `metadata` (`exchange_rate`, `amount_usd`, `amount_ves`) |
+| `cash_account_transactions` | **`seq`** (`cash_account_tx_seq`), `cashAccountId`, `transactionType` (INCOME/EXPENSE/ADJUSTMENT), **`amount` CON SIGNO** en la moneda de la cuenta (INCOME > 0, EXPENSE < 0, ADJUSTMENT ≠ 0), `balanceAfter`, `referenceType`/`referenceId` (`payment`, `payout`), `customerId`, `customerName`, `approvedBy`, `notes`, `metadata` (`exchange_rate`, `amount_usd`, `amount_ves`) |
 
 Se cambia respecto de OpenGravity: allí el monto era siempre positivo y el signo salía del tipo. Aquí es con signo, `balance += amount`, con una CHECK por tipo.
 
@@ -166,30 +169,56 @@ Se cambia respecto de OpenGravity: allí el monto era siempre positivo y el sign
 | `app.minVersionCliente` · `app.minVersionDelivery` | 1 · 1 (versionCode) |
 
 ## Invariantes
-FND las escribe tal cual en `api/tests/helpers.py::assert_money_invariants(session)`; `spec/money_model.py::check_invariants` usa las mismas fórmulas.
+FND las copia **literalmente** en `api/tests/helpers.py::assert_money_invariants(session, tol)`. Cada consulta debe devolver **0 filas**.
+
+`spec/money_model.py::check_invariants` implementa las mismas fórmulas. Excepciones: I-7 (el modelo no tiene cuentas del negocio) e I-8 (es una prueba de esquema/HTTP de FND y E12, no una consulta).
 
 ```sql
--- I-1 saldo = suma del ledger y nunca negativo (balanceAfter correlativo: verificado en Python ordenando por createdAt, id)
+-- I-1a saldo guardado = suma del ledger, nunca negativo
 SELECT c.id FROM customers c LEFT JOIN wallet_movements m ON m."customerId" = c.id
-GROUP BY c.id, c."walletBalance" HAVING c."walletBalance" <> COALESCE(SUM(m.amount),0) OR c."walletBalance" < 0;
-
--- I-2 paidFromWallet = −Σ(ORDER_CHARGE + ORDER_REFUND) del pedido (excluye reembolsos de CxC)
+GROUP BY c.id, c."walletBalance"
+HAVING c."walletBalance" <> COALESCE(SUM(m.amount),0) OR c."walletBalance" < 0;
+-- I-1b balanceAfter correlativo por seq
+SELECT id FROM (SELECT m.id, m."balanceAfter",
+   SUM(m.amount) OVER (PARTITION BY m."customerId" ORDER BY m.seq) AS run FROM wallet_movements m) t
+WHERE "balanceAfter" <> run OR run < 0;
+-- I-2 paidFromWallet = −Σ(ORDER_CHARGE + ORDER_REFUND)
 SELECT o.id FROM orders o LEFT JOIN wallet_movements m
   ON m."orderId" = o.id AND m.type IN ('ORDER_CHARGE','ORDER_REFUND')
 GROUP BY o.id, o."paidFromWallet" HAVING o."paidFromWallet" <> -COALESCE(SUM(m.amount),0);
-
--- I-3 CxC viva: paidAmount = −Σ RECEIVABLE_SETTLEMENT − Σ RECEIVABLE_REFUND ; amount > 0
+-- I-3 CxC viva: paidAmount = −Σ(RECEIVABLE_SETTLEMENT + RECEIVABLE_REFUND) y amount > 0
 SELECT r.id FROM receivables r LEFT JOIN wallet_movements m
   ON m."receivableId" = r.id AND m.type IN ('RECEIVABLE_SETTLEMENT','RECEIVABLE_REFUND')
 WHERE r.status <> 'VOID'
 GROUP BY r.id, r."paidAmount", r.amount
 HAVING r."paidAmount" <> -COALESCE(SUM(m.amount),0) OR r.amount <= 0;
-
--- I-4 pedido confirmado o posterior, no cancelado: total = paidFromWallet + (CxC.amount si no VOID) + CxC.forgivenAmount + roundingAdjustment ; roundingAdjustment ≤ tolerancia
--- I-5 pedido CANCELLED: paidFromWallet = 0 y su CxC VOID
--- I-6 por cliente: walletBalance = Σ(TOPUP_APPROVED + PAYMENT_REVERSAL + ADJUSTMENT + WALLET_PAYOUT)
---                                  − Σ paidFromWallet (pedidos no cancelados) − Σ paidAmount (CxC no VOID)
--- I-7 cash_accounts.balance = Σ cash_account_transactions.amount (con signo)
--- I-8 cocina solo ve CONFIRMED/PREPARING/READY y sus respuestas no tienen campos de dinero
--- I-9 pedido a crédito no cancelado: paymentStatus = ON_CREDIT si su CxC está OPEN/PARTIAL; si no, PAID
+-- I-4 pedido confirmado o posterior: total cubierto exactamente
+SELECT o.id FROM orders o LEFT JOIN receivables r ON r."orderId" = o.id
+WHERE o.status NOT IN ('AWAITING_PAYMENT','CANCELLED')
+  AND (o.total <> o."paidFromWallet" + o."roundingAdjustment"
+        + CASE WHEN r.id IS NULL THEN 0
+               WHEN r.status = 'VOID' THEN r."forgivenAmount"
+               ELSE r.amount + r."forgivenAmount" END
+       OR o."roundingAdjustment" < 0 OR o."roundingAdjustment" > :tol);
+-- I-5 pedido cancelado: nada cobrado y CxC anulada
+SELECT o.id FROM orders o LEFT JOIN receivables r ON r."orderId" = o.id
+WHERE o.status = 'CANCELLED' AND (o."paidFromWallet" <> 0 OR (r.id IS NOT NULL AND r.status <> 'VOID'));
+-- I-6 conservación por cliente
+SELECT c.id FROM customers c
+WHERE c."walletBalance" <>
+  COALESCE((SELECT SUM(amount) FROM wallet_movements m WHERE m."customerId" = c.id
+            AND m.type IN ('TOPUP_APPROVED','PAYMENT_REVERSAL','ADJUSTMENT','WALLET_PAYOUT')),0)
+  - COALESCE((SELECT SUM("paidFromWallet") FROM orders o WHERE o."customerId" = c.id AND o.status <> 'CANCELLED'),0)
+  - COALESCE((SELECT SUM("paidAmount") FROM receivables r WHERE r."customerId" = c.id AND r.status <> 'VOID'),0);
+-- I-7 cuentas del negocio (monto con signo) y balanceAfter por seq
+SELECT a.id FROM cash_accounts a LEFT JOIN cash_account_transactions t ON t."cashAccountId" = a.id
+GROUP BY a.id, a.balance HAVING a.balance <> COALESCE(SUM(t.amount),0);
+SELECT id FROM (SELECT t.id, t."balanceAfter",
+   SUM(t.amount) OVER (PARTITION BY t."cashAccountId" ORDER BY t.seq) AS run FROM cash_account_transactions t) x
+WHERE "balanceAfter" <> run;
+-- I-9 paymentStatus de pedidos a crédito
+SELECT o.id FROM orders o JOIN receivables r ON r."orderId" = o.id
+WHERE o.status <> 'CANCELLED'
+  AND o."paymentStatus" <> CASE WHEN r.status IN ('OPEN','PARTIAL') THEN 'ON_CREDIT' ELSE 'PAID' END;
 ```
+**I-8 (no es SQL):** cocina y delivery solo ven CONFIRMED, PREPARING o READY, y sus esquemas no tienen campos de dinero. FND lo prueba sobre el OpenAPI (`KitchenCard`, `DeliveryCard`, `OrderEventData`).

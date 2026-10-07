@@ -31,14 +31,15 @@ FCM va detrás de un flag: sin `google-services.json`, el push se apaga y la app
    - **Crédito:** confirmado al instante. Si se excede, se muestra el `detail` de la API con la acción “Recargar billetera”.
    - `OPEN_DEBT` u `OVERDUE_DEBT` → pantalla para pagar la deuda.
 5. **Mis pedidos:** estados en lenguaje simple, detalle, cancelar, **repetir pedido** y “Pagar faltante”. Esta última lee de `GET /orders/{id}` los valores `amountDue`, `amountDueVes`, `rate` y `expiresAt`, y los métodos de `GET /payment-methods`.
-6. **Billetera:** saldo, deuda, vencidas, crédito disponible, movimientos, **Recargar** y mis pagos (`GET /payments`, `GET /payments/{id}` con el motivo de rechazo).
+6. **Billetera:** saldo, deuda y vencidas (en USD y en Bs **de la API**), crédito disponible, movimientos, **Recargar** y mis pagos (`GET /payments`, `GET /payments/{id}` con el motivo de rechazo).
 7. **Perfil:** datos, dirección, WhatsApp del negocio, **eliminar cuenta** (`DELETE /auth/account`) y cerrar sesión.
-8. **Push:** pedido confirmado o en camino, pago aprobado o rechazado, crédito habilitado. Abre el pedido o el pago.
+8. **Push:** tipos y claves de `data` según la tabla §Push de 08. Se navega por `type` al pedido o al pago.
 
 ## App delivery
 - **Login** persistente.
 - **Por salir:** READY asignados a mí o sin asignar, con la hora visible; selección múltiple → “En camino” (respuesta `{updated, skipped}`).
 - **En camino:** “Entregado” con confirmación. Un 200 repetido es éxito.
+- `skipped` con razón: solo `ALREADY_OUT` cuenta como éxito; `CANCELLED`, `NOT_READY` y `ASSIGNED_TO_OTHER` se muestran al motorizado.
 - Llamar, WhatsApp y “Abrir en Maps” (dirección en texto). Contador de entregados hoy.
 - Push con sonido.
 - **Cola local** de acciones fallidas con reintento: `skipped` o 200 cuentan como éxito; un 409 real se muestra al usuario.
@@ -52,7 +53,7 @@ FCM va detrás de un flag: sin `google-services.json`, el push se apaga y la app
 ## Limitantes y verificación
 - **Sin Android SDK** en el contenedor. En local corre `gradle :core:network:test :core:data:test` (JVM puro): DTOs, mapper de `ApiError`, serializer de BigDecimal, repositorios con MockWebServer, cola de reintentos e idempotencia.
 - Los ViewModels y la UI se compilan y prueban en CI.
-- `.github/workflows/android.yml`: JDK 17, `android-actions/setup-android`, y luego `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug :app-cliente:testMockDebugUnitTest :app-delivery:testMockDebugUnitTest :core:network:test :core:data:test :core:designsystem:testDebugUnitTest`. Se suben APKs y `**/build/test-results/**`.
+- `.github/workflows/android.yml`: `on: push` a `claude/happy-johnson-24innr`, `block/M` y `block/Q2` (`paths: android/**, .github/workflows/android.yml`) más `workflow_dispatch`; JDK 17, `android-actions/setup-android`, y luego `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug :app-cliente:testMockDebugUnitTest :app-delivery:testMockDebugUnitTest :core:network:test :core:data:test :core:designsystem:testDebugUnitTest`. Se suben APKs y `**/build/test-results/**`.
 - **Entrega temprana:** en cuanto el esqueleto compile en su cabeza (módulos, wrapper, login), el agente hace commit y lo informa. El orquestador lo publica para que CI dé su primer veredicto mientras M sigue.
 
 ## Pruebas exigidas

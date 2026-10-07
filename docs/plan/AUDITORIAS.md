@@ -81,3 +81,46 @@ Seis lentes independientes: dinero, paralelismo, contrato, reutilización de Ope
 | INF-14 | baja | Hay inconsistencias entre compuertas y fichas: - 07 §3 dice que `e2e/run_scenarios.py` ejecuta 'E1–E9', mientras que G3 y Q1 §2 exigen E1–E12; - G1 pide 'todos … | 01 · 07 · FND · Q1 · M · Q2 |
 
 Verificación posterior: `spec` 31/31 en verde; 4.000 secuencias aleatorias × 80 operaciones sin violar invariantes.
+
+## Auditoría 2 (2026-10-07)
+
+Se repitieron las seis lentes. Dinero, paralelismo y contrato completaron; reutilización, pruebas/infra y producto/UX se cortaron por el límite de uso y se re-ejecutan en la ronda 2b. El orquestador revisó cada hallazgo contra el modelo ejecutable y los documentos antes de aplicarlo.
+
+**32 hallazgos, todos aplicados.**
+
+| ID | Sev. | Problema (resumen) |
+|---|---|---|
+| R2-M1 | alta | El orden del ledger no es determinista. I-1 verifica balanceAfter 'ordenando por createdAt, id', pero los id son cuid2, que son aleatorios. Además, OpenGravity, que se co… |
+| R2-M2 | alta | Al aprobar, el admin solo puede corregir `amountUsd` y/o `bcvRateUsed`; no puede corregir `amountLocal`. El caso real más común es un cliente que escribió mal el monto en… |
+| R2-M3 | alta | Hay un escenario sin regla: un pago insuficiente que se aprueba después del vencimiento. El job no cancela mientras hay un pago en revisión, así que expiresAt queda en el… |
+| R2-M4 | media | Hay un conflicto de propiedad de `orders.expiresAt`. 02 asigna expiresAt a B2, pero la ficha de B3 dice 'reject (extiende expiresAt)', y R2-M3 suma una extensión al aprob… |
+| R2-M5 | media | Un cliente CASH con deuda abierta (por reverso o cargo manual) puede seguir confirmando pedidos que ya estaban en AWAITING_PAYMENT, porque settle paga primero los pedidos… |
+| R2-M6 | media | 02 dice que FND escribe las invariantes 'tal cual' en assert_money_invariants, pero solo I-1…I-3 están en SQL. I-4, I-5, I-6 e I-9 son prosa, y cada agente las traducirá … |
+| R2-M7 | media | 'Ingresos del día' cuenta solo los pagos con status APPROVED. Cuando un pago se revierte, pasa a REVERSED y desaparece de forma retroactiva del ingreso de su día de aprob… |
+| R2-M8 | media | La unicidad de la referencia es por `(paymentMethodId, reference)`, pero lo que identifica una transferencia es la cuenta destino más la referencia. Con un método 'Pago m… |
+| R2-M9 | media | 08 define reduce como `{items[{orderItemId, qty}]}`, pero 03 y el modelo solo validan `0 < nuevoTotal ≤ total`. Así se acepta subir la cantidad de una línea y bajar otra … |
+| R2-M10 | baja | El cierre corre a las 23:50 y hace un upsert del día en curso. Los pagos aprobados y los pedidos confirmados entre las 23:50 y las 23:59 VET quedan fuera del PDF y de dai… |
+| R2-SW-01 | alta | §8 dice que `tests/test_authz_matrix.py` lo crea FND y que «B1, B2 y B3 lo amplían», y la ficha B1 también pide «ampliar el arnés de autorización». Pero ese archivo es de… |
+| R2-SW-02 | alta | La propiedad de `orders.expiresAt` es contradictoria y la interfaz no la transporta. Por un lado, 02 («Quién escribe qué en orders») asigna `expiresAt` a B2. Por otro, la… |
+| R2-SW-03 | alta | §Interfaces: las pruebas de la Fase 1 dependen de la semántica de los stubs por defecto, que se reemplazan en G2. (1) El stub de `checkout` dice «CREDIT confirma (PAID)»,… |
+| R2-SW-04 | alta | §4 G2 no se puede cumplir por el orden de las fases. G2 exige «CI verde (incluido `android.yml` si M ya entregó)», y `web.yml` corre el job `e2e-web` con los Playwright d… |
+| R2-SW-05 | alta | Q1 «trabaja en el directorio de la rama de integración», y Q2 arranca en G2 «en paralelo con Q1». STATUS.md también le asigna a Q2 la rama «integración». Así quedan dos a… |
+| R2-SW-06 | media | Hay escrituras legítimas fuera de las carpetas propias de 04, así que la revisión `git diff --stat` contra las carpetas (05 §2.1, G2) marca falsos positivos o lleva a mer… |
+| R2-SW-07 | media | La compuerta de inventario del contrato no se puede ejecutar como está escrita. «Compuerta G1» pide que el número de endpoints del OpenAPI sea «igual al número de filas d… |
+| R2-SW-08 | media | §Interfaces deja sin Protocol dos servicios de FND que viven en carpetas ajenas. (1) La configuración (`domain/settings/`, de B1 según 04) la leen B2 (`minLeadMinutes`, h… |
+| R2-SW-09 | media | §Riesgos dice que el orquestador «publica `block/M` en cuanto M entrega, para que `android.yml` corra durante la Fase 1», y Q2 itera igual sobre los logs. Pero 01 §Entorn… |
+| C2-01 | alta | Al catálogo de errores le faltan códigos que el propio plan exige. Como FND solo escribe el catálogo de 03 §7 y `core/errors.py` queda congelado, B1 y B3 no tienen con qu… |
+| C2-02 | alta | El contenido de los eventos no alcanza para la cocina ni para el admin: - **Cuándo se emite `order.updated`:** no está definido. 03 y B2 solo lo emiten al reducir y en RE… |
+| C2-03 | media | No está fijado el formato del stream. DSN escribe `useEventStream` en la Fase 0, antes de que B2 implemente el generador, y el formato queda abierto en tres puntos: - **L… |
+| C2-04 | alta | El admin comparte el esquema `OrderDetail` con el cliente, y a ese esquema le faltan `customerId`, `customerName`, `channel`, `assignedDriverId`, `contactPhone` y `prepar… |
+| C2-05 | alta | El refresh rota de forma estricta y no es idempotente. Hay tres casos en que el usuario pierde la sesión: - **Web:** `proxy.ts` (que redirige a refresh), `/api/auth/token… |
+| C2-06 | media | Pedidos a crédito: - **`amountDue` sin regla de estado:** 08 y el stub de FND lo definen como `total − paidFromWallet − roundingAdjustment`, sin condición. El modelo (`am… |
+| C2-07 | media | Faltan datos para mostrar USD y Bs: - **`GET /me/wallet` sin Bs:** devuelve saldo, deuda y vencidas solo en USD, sin Bs ni `rate`. PRODUCT exige “saldo a favor, deuda y m… |
+| C2-08 | media | El push es contrato entre B2/B3 (emisores) y M (receptor), pero no está en el OpenAPI ni en 08. B2 dice “Textos de 03 y 08”, y 08 no tiene textos ni claves de `data`. M d… |
+| C2-09 | media | Hay tres reintentos que no son idempotentes: 1. **Movimientos manuales del admin:** `POST /admin/customers/{id}/charges`, `/adjustments` y `/payouts` mueven dinero sin `I… |
+| C2-10 | media | Con `STORAGE_BACKEND=local` (dev, Prism/E2E de Q1, y staging mientras no exista el bucket), `signed_get_url` devuelve `/api/v1/files/{id}/local`, que pide la misma autori… |
+| C2-11 | media | G1 exige que el número de endpoints del OpenAPI sea “igual al número de filas de 08”. Las filas agrupan varias operaciones (por ejemplo, `GET·POST /admin/categories · PAT… |
+| C2-12 | media | B3 debe extender `expiresAt` al rechazar un pago (03 §3.6; B3 §3: “reject (extiende expiresAt)”). Pero 02 asigna `expiresAt` en exclusiva a B2, y el Protocol congelado `O… |
+| C2-13 | baja | 03 §3.2 dice que `GET /orders/{id}` incluye `walletUsed` y `paymentMethods[]`. 08 dice lo contrario: `OrderDetail` lleva `paidFromWallet` y no trae métodos, que M lee de … |
+
+Verificación: `spec` 34/34 en verde (escenarios nuevos: aprobación insuficiente después del vencimiento, deuda de contado antes que el pedido, referencia por cuenta destino); prueba de estrés de 320.000 operaciones sin violaciones; inventario del contrato con 104 operaciones contadas por script.

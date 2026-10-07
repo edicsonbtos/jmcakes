@@ -16,6 +16,7 @@ En una tablet o TV de pared, legible a 2 m: **qué hacer, para cuándo y cuánto
 3. **Total a producir:** Hoy, Mañana o una fecha.
 4. **Tiempo real:**
    - `useEventStream` (de DSN) con los eventos `order.confirmed`, `order.updated` y `order.cancelled`;
+   - **upsert** de la tarjeta con `data` (`OrderEventData`); se quita si sale de CONFIRMED, PREPARING o READY;
    - reconexión con token nuevo y `lastEventId`;
    - con `reset`, recarga completa;
    - banner “Sin conexión”.

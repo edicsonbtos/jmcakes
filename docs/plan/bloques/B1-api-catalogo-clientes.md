@@ -16,7 +16,8 @@ Que el admin publique productos, suba y baje precios (también en masa), y gesti
 3. **`CatalogService.price_lines`:** valida publicado, disponible y `minQty`. Errores `PRODUCT_UNAVAILABLE` y `BELOW_MIN_QTY` con el producto en `meta`.
 4. **Archivos:**
    - `POST /files` multipart (≤ 5 MB; jpeg, png, webp o pdf, validado por contenido) → almacenamiento `S3Storage` (Railway Bucket) o `LocalStorage`.
-   - `GET /files/{id}/url` y `/local` con autorización por propósito: PRODUCT_IMAGE para C y A; PAYMENT_PROOF para su dueño y A.
+   - `GET /files/{id}/url` con autorización por propósito: PRODUCT_IMAGE para C y A; PAYMENT_PROOF para su dueño y A.
+   - `/local` con **URL firmada** (`exp` + `sig` HMAC, TTL de 1 h; firma inválida → 403) para que `<img>` y Coil carguen sin Bearer.
    - **Implementar `FileService`** (`assert_owned`, `signed_get_url`).
 5. **`GET`/`PATCH /me/profile`** en `profile.py`.
 6. **Clientes (admin):**
@@ -28,13 +29,14 @@ Que el admin publique productos, suba y baje precios (también en masa), y gesti
    - `GET /settings/public` con la forma exacta de 08.
    - `GET`/`PATCH /admin/settings` por secciones, con validación: horas `HH:MM` con apertura menor que cierre, rangos y `delivery.driverUserId` de un DELIVERY activo.
    - El commit lo hace el endpoint, junto con la auditoría.
-9. `GET /admin/audit`.
+9. `GET /admin/audit`: B1 es dueño de `domain/audit/` (consulta paginada) sin cambiar la firma de `AuditService.log`. `SettingsService`: B1 agrega validación sin cambiar su firma (08).
 
 ## No tocar
 Pedidos y dinero (B2/B3), `db_models.py`, `interface.py`, `main.py`, `web/`, `android/`.
 
 ## Pruebas exigidas
-- Cada endpoint con su rol, más la ampliación del arnés de autorización: el cliente A no ve al B; PAYMENT_PROOF ajeno da 403; PRODUCT_IMAGE es legible por C.
+- Todas en `api/tests/b1/`. Propiedad en `tests/b1/test_authz_b1.py`: el cliente A no ve al B; PAYMENT_PROOF ajeno da 403; PRODUCT_IMAGE es legible por C; URL local alterada da 403.
+- Para push y bloqueo, usar las fixtures `push_spy` y `orders_double`.
 - Cambio masivo: preview = apply; token alterado o vencido se rechaza; queda el historial.
 - `price_lines`: todos los casos.
 - Archivos: tamaño, tipo y autorización.

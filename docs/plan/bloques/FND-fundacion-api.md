@@ -37,14 +37,16 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
 5. **Contrato completo**
    - Esquemas Pydantic de **todos** los endpoints de [08](../08-api-endpoints.md), en el archivo de router indicado ahí y con ejemplos realistas: productos venezolanos, dinero en string y fechas con `Z`.
    - Los ejemplos de `accessToken` son **JWT HS256 reales** firmados con `dev-mock-secret-no-usar-en-prod` (`role=ADMIN`, `exp` 2099), y el de `/auth/me` es coherente con ellos.
-   - Componentes `EventEnvelope`, `OrderEventData` y `PaymentEventData` exportados en el OpenAPI.
+   - Componentes `EventEnvelope`, `OrderEventData`, `PaymentEventData`, `KitchenCard` y `DeliveryCard` exportados en el OpenAPI, sin campos de dinero en los de cocina y delivery (I-8).
+   - Cada operación lleva `openapi_extra={"x-roles": [...]}`. `export_openapi.py --count` imprime el número de operaciones.
    - Endpoints no implementados → `AppError(NOT_IMPLEMENTED)` (501).
    - `api/scripts/export_openapi.py [--check]` → `contracts/openapi.json`.
    - `api/scripts/mock.sh`: Prism en `$MOCK_PORT`.
 6. **Interfaces y fábricas** ([08](../08-api-endpoints.md) §Interfaces):
    - `services/interfaces.py` y `domain/*/interface.py` con los Protocol y DTO.
    - Cada fábrica en el archivo del implementador, con el stub descrito.
-   - **Reales en FND:** `CustomersService`, `RateService.rate_for` (03 §0) y `OrdersService.confirm_paid` (mínimo real).
+   - **Reales en FND:** `CustomersService`, `SettingsService`, `AuditService.log`, `RateService.rate_for` (03 §0) y `OrdersService.confirm_paid` (mínimo real). El stub de `MoneyService.checkout` sigue exactamente 08, incluido `expiresAt`.
+   - Registro de fábricas `services/registry.py`: se resuelven en tiempo de llamada y las fixtures de prueba pueden sustituirlas.
 7. **Dominios que FND deja funcionando:**
    - `exchange_rates`: modelo, repositorio, fetcher, `rate_for` y `sync_daily_rate` (sin endpoints);
    - `audit`: servicio;
@@ -59,7 +61,11 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
      - `client` (httpx con ASGITransport);
      - `make_user(role)` con su token; `customer_cash`, `customer_credit`, `money_setup` (métodos, cuentas bancarias y cuentas del negocio).
    - **`tests/helpers.py`:** `assert_money_invariants(session)` con el SQL **literal** de 02 (I-1…I-9).
-   - **`tests/test_authz_matrix.py`:** recorre el OpenAPI y verifica que cada rol no permitido recibe 401/403. B1, B2 y B3 lo amplían.
+   - **`tests/test_authz_matrix.py`:** lee los roles de `x-roles` de cada operación del OpenAPI y verifica que cada rol no permitido recibe 401/403 en **todas** las operaciones. Nadie más lo edita. Los casos de propiedad (cliente A contra B) van en `tests/bX/test_authz_bX.py` de cada bloque.
+   - **`pytest.ini`:** `testpaths = tests`. Una prueba falla si `tests/b1/`, `tests/b2/` o `tests/b3/` existen y recogen 0 pruebas.
+   - **Dobles inyectables** (08 §Interfaces): `event_spy`, `push_spy`, `orders_double`, `money_double` y `settings_cache_clear` (autouse).
+   - **`tests/test_contract_inventory.py`:** compara (método, ruta) del OpenAPI con el inventario de 08 (104 operaciones).
+   - **Refresh:** dos refresh concurrentes y un reintento dentro de la gracia de 60 s (E15).
    - **Pruebas propias:**
      - auth;
      - rate limit con distintos `X-Forwarded-For`;
@@ -91,4 +97,4 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
 - Nada de lógica de B1, B2 ni B3 más allá de los stubs indicados.
 
 ## Compuerta G1 (parte FND)
-Todo el §8 en verde, con la salida pegada en el handoff. El handoff también incluye el número de endpoints del OpenAPI, igual al número de filas de 08.
+Todo el §8 en verde, con la salida pegada en el handoff, incluido `test_contract_inventory` (104 operaciones).

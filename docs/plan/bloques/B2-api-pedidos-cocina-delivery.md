@@ -24,24 +24,27 @@ El pedido nace en la app (“lo quiero hoy” o programado). Llega a cocina en t
    - **No hay push a cocina:** se entera por SSE.
 8. **Delivery:**
    - `GET /delivery/orders` incluye los asignados a mí **o sin asignar**.
-   - `out-for-delivery` asigna a quien los saca y responde `{updated, skipped}` (idempotente).
+   - `out-for-delivery` asigna a quien los saca y responde `{updated, skipped[{orderId, reason}]}` con razón `ALREADY_OUT`, `NOT_READY`, `CANCELLED` o `ASSIGNED_TO_OTHER`.
+   - `cancel` sobre un pedido ya cancelado → 200 (idempotente).
    - `delivered` es idempotente.
    - Push al cliente.
    - `assign-driver` (admin).
 9. **Eventos:**
-   - `EventBus` en memoria con `publish_after_commit` (hook `after_commit`) y el sobre `EventEnvelope` de 08.
+   - `EventBus` en memoria con `publish_after_commit` (hook `after_commit`), el sobre `EventEnvelope` y el **formato exacto del stream** de 08.
+   - `order.updated` se emite en **toda** transición, en `reduce` y en `assign-driver`. Cocina recibe solo lo que entra o sale de CONFIRMED, PREPARING o READY. `OrderEventData` = campos de `KitchenCard`.
    - `POST /events/token` (60 s, un solo uso).
    - `GET /events?token&lastEventId`, también con la cabecera `Last-Event-ID`.
    - Filtro por rol (K nunca recibe `payment.*`), heartbeat de 20 s y buffer de 200 eventos.
    - Evento `reset` si no se puede reanudar.
    - Cabeceras `no-cache` y `X-Accel-Buffering: no`.
-10. **Push:** `PushSender` (FCM si hay `FCM_CREDENTIALS_JSON`; si no, Log). Limpia los tokens inválidos. Textos de 03 y 08.
+10. **Push:** `PushSender` (FCM si hay `FCM_CREDENTIALS_JSON`; si no, Log). Limpia los tokens inválidos. Tipos, textos y claves de `data` según la tabla §Push de 08.
 11. Listados de admin con cursor y detalle con bitácora.
 
 ## No tocar
 `services/{ledger,money}.py`, los dominios de dinero, catálogo y clientes, `db_models.py`, `interface.py`, `main.py`, `jobs/runner.py`.
 
 ## Pruebas exigidas
+Todas en `api/tests/b2/`, con los dobles de FND (`event_spy`, `push_spy`, `money_double`) cuando el comportamiento ajeno importe.
 - Todas las transiciones válidas e inválidas por rol.
 - Agenda: límites, horario, día de Caracas a las 23:30 y E4 con el reloj simulado.
 - Idempotencia, incluido el conflicto.
@@ -53,6 +56,8 @@ El pedido nace en la app (“lo quiero hoy” o programado). Llega a cocina en t
   - commit → evento, rollback → nada;
   - filtro por rol;
   - reanudación por `lastEventId`;
-  - `reset`.
+  - `reset`;
+  - el **texto emitido** coincide con el formato de 08;
+  - OUT_FOR_DELIVERY emite `order.updated` a cocina; un pedido AWAITING reducido no llega a cocina.
 - Push con el adaptador falso.
 - Flujo ASAP completo con los stubs de B3.

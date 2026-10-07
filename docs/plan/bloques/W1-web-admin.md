@@ -15,11 +15,12 @@ El dueño controla todo desde el teléfono o la computadora. Aprobar pagos está
 2. **Pagos:**
    - Bandeja con cursor por estado.
    - **Comprobante a la vista:** imagen ampliable o PDF, referencia, monto en Bs y USD, tasa, titular, pedido y cliente.
-   - Acciones: Tomar · Aprobar (corregir monto o tasa) · Rechazar (con motivo) · Revertir (con motivo).
+   - Acciones: Tomar · Aprobar (corregir **monto recibido en la moneda del pago** o tasa; el USD lo recalcula la API) · Rechazar (con motivo) · Revertir (con motivo).
    - Contador global en el Sidebar con `GET /admin/payments/pending-count` + SSE `payment.*` + sonido.
 3. **Pedidos:**
    - Tabla con filtros del servidor; detalle con bitácora, pagos y CxC.
-   - Acciones: cancelar, reducir, forzar transición y reasignar motorizado.
+   - Acciones: cancelar, reducir (cantidades por línea, solo hacia abajo), forzar transición y reasignar motorizado.
+   - Filtro “sin motorizado” (`unassigned=true`). Usa `AdminOrderDetail`.
    - **Crear pedido para un cliente:** `POST /admin/orders/quote` y luego `POST /admin/orders`, con `Idempotency-Key` generado una vez por intento.
 4. **Clientes:**
    - Listado con billetera, deuda, modo y estado.

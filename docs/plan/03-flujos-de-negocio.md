@@ -73,7 +73,11 @@ si no      → AWAITING_PAYMENT; paymentStatus = PARTIALLY_PAID si usar > 0, si 
              expiresAt = max(ahora + PAY_WINDOW, min(ahora + unpaidExpiryHours, dueAt − minLeadMinutes))
              evento order.created (admin)
 ```
-La respuesta (`checkout`) y `GET /orders/{id}` incluyen: `walletUsed`, `amountDue`, `amountDueVes`, `rate` y `expiresAt`, más `paymentMethods[]` con sus cuentas e **ids**.
+`expiresAt` lo calcula B3 en `checkout`. Un ASAP siempre vence a `ahora + PAY_WINDOW`, porque `dueAt − minLead` ya pasó; `unpaidExpiryHours` solo pesa en programados lejanos.
+
+Qué devuelve cada respuesta:
+- **`checkout`** (al crear): `walletUsed` y `paymentMethods[]` con cuentas e **ids**.
+- **`GET /orders/{id}`:** `paidFromWallet`, `amountDue`, `amountDueVes`, `rate` y `expiresAt`. Los métodos salen de `GET /payment-methods`.
 
 La app muestra: “Usamos $X de tu billetera. Te falta pagar $Y (Bs Z) antes de las HH:MM”. Debajo, los datos para pagar y el formulario.
 
@@ -85,7 +89,7 @@ Propósitos: `ORDER` (paga el faltante de un pedido) y `WALLET_TOPUP` (recarga).
 4. Conversión:
    - **VES:** `bcvRateUsed = rate_for(paidOn).value` y `amountUsd = round(amountLocal / bcvRateUsed, 2)`.
    - **USD:** `amountUsd = amountLocal`.
-5. **Referencia única** entre pagos no rechazados: el índice parcial cubre PENDING_REVIEW, IN_REVIEW, APPROVED y **REVERSED**. Si se repite: `409 DUPLICATE_REFERENCE`.
+5. **Referencia única por cuenta destino** (`bankAccountId` + `reference`) entre pagos no rechazados: cubre PENDING_REVIEW, IN_REVIEW, APPROVED y **REVERSED**. Si se repite: `409 DUPLICATE_REFERENCE`.
 6. Comprobante: `proofFileId` debe ser un archivo `PAYMENT_PROOF` del mismo usuario (`FileService.assert_owned`).
 7. `status = PENDING_REVIEW`. El pedido muestra `hasPaymentInReview`. Evento `payment.reported` al admin.
 8. **No se mueve dinero.** Idempotencia igual que en los pedidos.
@@ -93,7 +97,9 @@ Propósitos: `ORDER` (paga el faltante de un pedido) y `WALLET_TOPUP` (recarga).
 ### 3.4 Aprobar un pago (admin)
 ```
 lock payment FOR UPDATE; status ∈ {PENDING_REVIEW, IN_REVIEW} si no 409 PAYMENT_NOT_REVIEWABLE
-correcciones opcionales del admin (amountUsd y/o bcvRateUsed > 0) → audit_logs
+correcciones opcionales del admin: amountLocal (> 0, en la moneda del pago) y/o bcvRateUsed (> 0, solo VES)
+   → amountUsd = round(amountLocal / bcvRateUsed, 2) si VES, amountUsd = amountLocal si USD
+   → correctedFrom guarda {amountLocal, bcvRateUsed, amountUsd} originales; audit_logs
 lock customer FOR UPDATE
 ledger.record_payment_approved:
    wallet + amountUsd                                     (TOPUP_APPROVED)
@@ -102,16 +108,20 @@ ledger.record_payment_approved:
        metadata {exchange_rate, amount_usd, amount_ves}
 status = APPROVED, approvedBy, approvedAt
 settle(customer, prioridad = payment.orderId)
-push: “Pago aprobado: +$X” (y “Tu pedido #N entró a producción” si se confirmó)
+si payment.orderId sigue AWAITING_PAYMENT → expiresAt = max(expiresAt, ahora + PAY_WINDOW)
+push PAYMENT_APPROVED: “Pago aprobado: +$X” (+ “Tu pedido #N entró a producción”, o “te falta $Y; tienes hasta HH:MM”)
 ```
 
 ### 3.5 `settle(customer, prioridad)`
 Con el cliente bloqueado. El orden de las obligaciones es:
 ```
-1. el pedido prioridad (si AWAITING_PAYMENT)          ┐ se omiten si el cliente
-2. otros AWAITING_PAYMENT del cliente, createdAt ASC   ┘ está bloqueado (§1)
-3. CxC OPEN/PARTIAL por dueAt ASC, issuedAt ASC
+cliente CREDIT, o CASH sin deuda:                 cliente CASH con CxC abierta (reverso, fiado, crédito anterior):
+1. el pedido prioridad (si AWAITING_PAYMENT)       1. CxC OPEN/PARTIAL por dueAt ASC, issuedAt ASC
+2. otros AWAITING_PAYMENT, createdAt ASC           2. el pedido prioridad
+3. CxC por dueAt ASC, issuedAt ASC                 3. otros AWAITING_PAYMENT
+(los pedidos se omiten si el cliente está bloqueado, §1)
 ```
+Un cliente de contado **salda su deuda antes** de que se confirme cualquier pedido suyo. Así no se premia un pago revertido.
 Para cada obligación, mientras W > 0:
 - **Pedido:**
   - `falta = total − paidFromWallet − roundingAdjustment` y `cobrar = min(W, falta)` → `ORDER_CHARGE`.
@@ -160,7 +170,9 @@ Los pagos en revisión de ese pedido siguen su curso. Al aprobarse, el dinero en
 
 ### 3.9 Reducir un pedido (admin, antes de READY, por faltante en cocina)
 ```
-si su CxC tiene forgiven > 0 → 409 ORDER_NOT_REDUCIBLE;   0 < nuevoTotal ≤ total si no 422 ONLY_REDUCTION
+si su CxC tiene forgiven > 0 → 409 ORDER_NOT_REDUCIBLE
+por línea: 0 ≤ qtyNueva ≤ qtyActual y al menos una línea con qty > 0; si no 422 ONLY_REDUCTION
+nuevoTotal = Σ líneas + deliveryFee (el envío no se reduce; las líneas en 0 se conservan con qty 0)
 cobrado = paidFromWallet + CxC.paidAmount + roundingAdjustment
 devolver = max(0, cobrado − nuevoTotal)
 CxC.amount = min(CxC.amount, max(CxC.paidAmount, nuevoTotal − paidFromWallet − roundingAdjustment))
@@ -177,7 +189,7 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 |---|---|---|
 | `bcv_sync` | 06:00 | `sync_daily_rate()`: upsert de la fila BCV del día. |
 | `unpaid_auto_cancel` | cada 10 min | Toma `orders` AWAITING_PAYMENT con `expiresAt < ahora` usando **`FOR UPDATE SKIP LOCKED`**. Cancela los que no tengan pagos PENDING_REVIEW o IN_REVIEW (§3.8, actor sistema). Idempotente. |
-| `daily_closing` | 23:50 | Métricas del día de Caracas (por `approvedAt` y `confirmedAt` en SQL) + PDF. Upsert por fecha. |
+| `daily_closing` | **00:05**, para el **día anterior** | Métricas del día de Caracas (por `approvedAt` y `confirmedAt` en SQL) + PDF. Upsert por fecha. Se reprocesa con `POST /admin/closures/{date}/run`. |
 
 ### 3.11 Anular o condonar una CxC (admin)
 - **Anular:** solo las CxC de source **MANUAL** o **PAYMENT_REVERSAL**. Las de un pedido se anulan cancelando el pedido (§3.8); si no, `409 RECEIVABLE_NOT_VOIDABLE`. Lo pagado vuelve con `RECEIVABLE_REFUND`; luego `VOID` (VOIDED) y `settle`.
@@ -218,10 +230,10 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 ## 6. Dashboard (día de Caracas, en SQL)
 | Indicador | Definición |
 |---|---|
-| Ingresos del día | Pagos APPROVED con `approvedAt` ∈ [inicio, fin) del día de Caracas convertidos a UTC naive. Total USD, desglose por método y por cuenta (Bs exactos en cuentas VES). |
-| Devoluciones del día | `WALLET_PAYOUT` y reversos del día. |
+| Ingresos del día | Pagos con status **APPROVED o REVERSED** y `approvedAt` en el día de Caracas, convertido a UTC naive. Un reverso posterior **no** cambia el ingreso del día ya cerrado. Total USD, desglose por método y por cuenta (Bs exactos en cuentas VES). |
+| Reversos y devoluciones del día | Pagos REVERSED con `reversedAt` en el día, y `WALLET_PAYOUT` del día, en líneas propias. |
 | Ventas del día | Σ `total` de pedidos con `confirmedAt` en el día, no cancelados. |
-| Pedidos por estado | En vivo. |
+| Pedidos por estado | En vivo, incluido `readyUnassignedCount` (READY sin motorizado). |
 | Pagos por verificar | Cantidad y Σ `amountUsd` en PENDING_REVIEW o IN_REVIEW (`GET /admin/payments/pending-count`). |
 | CxC | Total abierto, detal vs mayorista, vigente vs vencida, antigüedad 0–7 / 8–15 / 16–30 / +30, top deudores. |
 | Saldo a favor de clientes | Σ `walletBalance`. |
@@ -261,6 +273,14 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 | `RATE_UNAVAILABLE` | 409 | No hay tasa del día. El administrador debe cargarla. |
 | `IDEMPOTENCY_CONFLICT` | 409 | Esta solicitud ya se envió con otros datos. |
 | `FILE_INVALID` | 422 | El archivo debe ser una imagen o PDF de hasta 5 MB. |
+| `PAYMENT_ACCOUNT_MISMATCH` | 422 | La cuenta elegida no corresponde a ese método o moneda. |
+| `PRICE_PREVIEW_EXPIRED` | 409 | La vista previa venció o los precios cambiaron. Genera una nueva. |
+| `PHONE_TAKEN` | 409 | Ese teléfono ya está registrado. Inicia sesión. |
+| `RATE_LIMITED` | 429 | Demasiados intentos. Espera un minuto. |
+| `UNAUTHENTICATED` | 401 | Tu sesión expiró. Inicia sesión de nuevo. |
+| `VALIDATION_ERROR` | 422 | Revisa los datos: <detalle>. |
+| `INVALID_SETTINGS` | 422 | Configuración inválida: <detalle>. |
+| `SERVICE_UNAVAILABLE` | 503 | Servicio no disponible. Intenta de nuevo. |
 | `NOT_IMPLEMENTED` | 501 | Aún no disponible. |
 
 El catálogo vive en `api/src/core/errors.py` (enum, HTTP y texto). Una prueba de la API verifica que contiene todos los códigos de `spec/money_model.py::ERROR_CODES`, y `spec` verifica que todos están en esta tabla.

@@ -1,6 +1,6 @@
 # Q1 — Integración backend + web, E2E, runbook de staging y auditorías
 
-**Fase 2** · trabaja **en el directorio de la rama de integración**, después de que el orquestador integra la Fase 1 · BD `panaderia_test_q1` y `panaderia_e2e` · puertos API 8020 y web 3020
+**Fase 2** · **worktree aislado `block/Q1`** creado desde el estado integrado en G2 (como todos los agentes); escribe en `e2e/**` y en correcciones de `api/**` y `web/**`. Aplica además la lista de correcciones de UI web que entregue Q2 · BD `panaderia_test_q1` y `panaderia_e2e` · puertos API 8020 y web 3020
 
 ## Objetivo
 Que todo funcione **junto**: la API real cumple `spec/`, la web habla con la API real, existe un runbook exacto para staging y las auditorías no dejan hallazgos altos.

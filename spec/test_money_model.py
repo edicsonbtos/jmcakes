@@ -364,6 +364,40 @@ def test_m11_every_model_error_code_is_in_catalog():
     assert not missing, f"códigos sin documentar en 03 §7: {missing}"
 
 
+# ---------------- v2.2: hallazgos de la auditoría 2 ----------------
+def test_r2_underpaid_approval_after_expiry_reopens_window(shop):
+    c = shop.register()
+    o = shop.create_order(c.id, "12.00", "a")
+    p = shop.report_payment(c.id, "5.00", reference="R", order_id=o.id)
+    shop.now += 2 * DAY
+    shop.approve(p.id)
+    assert o.status == OS.AWAITING_PAYMENT and shop.amount_due(o.id) == D("7.00")
+    shop.now += 10
+    assert shop.run_unpaid_auto_cancel() == []        # tiene ventana para pagar la diferencia
+    shop.check_invariants()
+
+
+def test_r2_cash_with_reversal_debt_pays_debt_before_order(shop):
+    c = shop.register()
+    o = shop.create_order(c.id, "12.00", "a")
+    p = shop.report_payment(c.id, "5.00", reference="R1", order_id=o.id)
+    shop.approve(p.id)
+    shop.reverse(p.id)                                # deuda 5 (el saldo ya estaba en el pedido)
+    assert shop.open_debt(c.id) == D("5.00")
+    shop.approve(shop.report_payment(c.id, "7.00", reference="R2", order_id=o.id).id)
+    assert shop.open_debt(c.id) == D("0.00")          # primero salda la deuda
+    assert o.status == OS.AWAITING_PAYMENT            # el pedido aún no se confirma
+    shop.check_invariants()
+
+
+def test_r2_reference_unique_per_bank_account(shop):
+    c = shop.register()
+    shop.report_payment(c.id, "5.00", reference="X", method="PAGO_MOVIL", bank_account="B1")
+    with pytest.raises(DomainError):
+        shop.report_payment(c.id, "5.00", reference="X", method="TRANSFERENCIA", bank_account="B1")
+    shop.report_payment(c.id, "5.00", reference="X", method="PAGO_MOVIL", bank_account="B2")
+
+
 # --- Propiedades: cualquier secuencia de operaciones respeta las invariantes
 OPS = st.lists(st.tuples(
     st.sampled_from(["order", "sched", "pay", "pay_order", "approve", "reject", "cancel", "advance",

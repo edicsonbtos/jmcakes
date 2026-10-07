@@ -7,9 +7,9 @@
   - cancelar y reducir; bloquear; condonar y anular CxC; devoluciones y ajustes;
   - vencimientos con ventana mínima de pago;
   - catálogo `ERROR_CODES`.
-- `spec/test_money_model.py` tiene **29 escenarios** más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
+- `spec/test_money_model.py` tiene **32 escenarios** más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
 - Resultados al cerrar la auditoría 1:
-  - `31 passed`.
+  - `34 passed` (v2.2, tras la auditoría 2).
   - Corrida extendida de **4.000 secuencias × 80 operaciones (320.000 operaciones)** sin violaciones, con todas las ramas ejercitadas: OPEN_DEBT, OVERDUE_DEBT, bloqueos, condonación, anulación, reducción a 0 y referencias duplicadas.
 - Instalar y correr: `pip install -r spec/requirements.txt && python -m pytest spec -q`.
 - **Si la API y el modelo discrepan, manda el modelo**, salvo que se pruebe un error en él. En ese caso se corrigen el modelo y 03 en el mismo commit.
@@ -29,11 +29,13 @@
 | E9 | Idempotencia (misma llave = mismo recurso; otro contenido = 409) | ✅ | B2 · B3 | ✅ |
 | E10 | Concurrencia: dos aprobaciones del mismo cliente · aprobar mientras se crea un pedido · reporte contra el job de vencimiento | — | B3 (`checkout` y `approve` en sesiones reales) · B2 (job) | ✅ |
 | E11 | Día de Caracas: pago aprobado a las 22:30 VET cuenta en ese día (dashboard y cierre) | — | B3 | ✅ |
+| E11b | Aprobar el día 1 y revertir el día 2 no cambia el ingreso del día 1; el reverso aparece el día 2 | — | B3 | ✅ |
+| E15 | Concurrencia de refresh (dos refresh simultáneos y reintento dentro de la gracia) | — | FND | ✅ |
 | E12 | Autorización por rol y propiedad; cocina y delivery sin dinero | — | FND (arnés) + cada B | ✅ |
 | E13 | Bloqueo, condonar/anular, devolución de saldo, reducción | ✅ | B3 · B2 | ✅ |
 | E14 | Tasa: `rate_for` (MANUAL > BCV > última ≤ d), RATE_UNAVAILABLE, pago con los Bs exactos mostrados → CONFIRMED | — | FND (`rate_for`) · B3 | ✅ |
 
-**B3 no crea pedidos por HTTP** (los endpoints son de B2): usa `tests/b3_orders_helper.py`, que inserta `OrderDB` con los modelos congelados y llama a `MoneyService.checkout` / `on_order_cancelled`.
+**B3 no crea pedidos por HTTP** (los endpoints son de B2): usa `tests/b3/orders_helper.py`, que inserta `OrderDB` con los modelos congelados y llama a `MoneyService.checkout` / `on_order_cancelled`.
 
 ## 3. Por componente
 | Componente | Herramientas | Exigido |
@@ -51,8 +53,8 @@
 | Gate | Responsable | Condición |
 |---|---|---|
 | **G0** fin del plan | orquestador | `spec` verde · 2 auditorías aplicadas · CLAUDE.md coherente con v2. |
-| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `contracts/openapi.json` con **todos los endpoints de 08** (contados); cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
-| **G2** fin de Fase 1 (6 agentes) | orquestador | Cada rama con sus pruebas verdes y su handoff · `git diff --stat` dentro de sus carpetas · tras integrar: suite completa verde, `alembic heads` = 1, contrato regenerado, `api-types.ts` regenerado, CI verde (incluido `android.yml` si M ya entregó). |
+| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las **104 operaciones** del inventario de 08; cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
+| **G2** fin de Fase 1 (6 agentes) | orquestador | Cada rama con sus pruebas verdes y su handoff · `git diff --stat` dentro de sus carpetas · tras integrar: suite completa verde, `alembic heads` = 1, contrato y `api-types.ts` regenerados · **CI verde en `api.yml`, `contract.yml`, `secrets.yml` y `web.yml` (lint/test/build)**. `e2e-web` y `android.yml` pueden quedar en rojo: sus fallas se registran en STATUS.md y pasan a G3 (Q1 la web, Q2 Android). |
 | **G3** fin de Fase 2 | orquestador + Q1/Q2 | E2E E1–E14 verdes en CI · staging: `/api/health` OK, `get_database_tables` con las tablas de 02, `alembic_version` = head, login de admin en la web de staging · `android.yml` verde con pruebas > 0 · auditor contable y `/security-review` sin hallazgos altos · `impeccable detect`/`audit` sin críticos. |
 
 ## 5. Datos

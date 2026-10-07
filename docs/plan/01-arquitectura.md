@@ -69,7 +69,7 @@ jmcakes/
 
 ## Autenticación
 - `users.role` ∈ {ADMIN, PRODUCTION, DELIVERY, CUSTOMER}; login por teléfono + contraseña (bcrypt).
-- Access JWT HS256 **30 min** (`sub`, `role`, `cid`) · refresh rotativo 30 días (hash en `refresh_tokens`).
+- Access JWT HS256 **30 min** (`sub`, `role`, `cid`) · refresh rotativo 30 días (hash en `refresh_tokens`), con **gracia de 60 s** (`REFRESH_GRACE_SECONDS`) para refresh concurrentes o respuestas perdidas. La ruta web `/api/auth/refresh` serializa las llamadas por cookie, y el `Authenticator` de Android está sincronizado.
 - **Web** (corrige el patrón de OpenGravity, que no tenía refresh):
   - Server Action de login guarda **`authToken` y `refreshToken`** en cookies httpOnly, SameSite=Lax, path `/`.
   - `src/app/api/auth/refresh/route.ts` llama `POST /api/v1/auth/refresh` y rota ambas cookies.
@@ -112,7 +112,7 @@ jmcakes/
 | Entorno | BD | Despliegue |
 |---|---|---|
 | Local / agentes | Postgres 16 local, `panaderia_test_<id>` | — |
-| CI | servicio `postgres:16` | cada push a la rama de integración |
+| CI | servicio `postgres:16` | push a la rama de integración; `android.yml` también en `block/M` y `block/Q2`; `workflow_dispatch` |
 | staging | Neon rama `staging` | Railway, auto desde la rama de integración |
 | production | Neon rama `main` | tras aprobación del dueño |
 

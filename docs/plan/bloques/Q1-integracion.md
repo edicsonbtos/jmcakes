@@ -37,3 +37,14 @@ Que todo funcione **junto**: la API real cumple `spec/`, la web habla con la API
 
 ## Definición de terminado
 G3 en la parte backend y web ([07](../07-pruebas.md)), con las salidas en el handoff.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **Verificación de staging sin navegador:**
+  - `curl POST https://<api>/api/v1/auth/login` con el admin → 200 y `role=ADMIN`;
+  - `GET https://<web>/login` → 200;
+  - job `staging-smoke` en `e2e.yml` (`workflow_dispatch` con `web_url` y `api_url`) que hace el login con Playwright usando los secretos `STAGING_ADMIN_PHONE` y `STAGING_ADMIN_PASSWORD`, cargados por el orquestador.
+- **Runbook:** builder RAILPACK, región `us-east4`, config file, todas las variables de 01 (incluidas `SEED_PASSWORD` y VAPID).
+  - La contraseña del admin la genera el orquestador, se la entrega al dueño **solo por el chat**, y el dueño la cambia al primer ingreso.
+- **E2E con `ACCESS_TOKEN_TTL_SECONDS=60`** para la prueba de sesión larga de cocina (W2).
+- Aplica la lista de correcciones web que entregue Q2.

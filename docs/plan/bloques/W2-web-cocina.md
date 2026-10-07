@@ -41,3 +41,11 @@ Prism para REST (`MOCK_PORT=4012`). **Prism no emite SSE**: con `?simular=1` y s
 
 ## No tocar
 `src/app/(admin)`, `src/components/{ui,admin,layout}`, archivos existentes de `src/lib`, `package.json`, `api/`, `android/`.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **Reloj de Caracas en el cliente:**
+  - el agrupado (Hoy o Programados) y “Atrasado” se calculan en la tablet desde `dueAt`, con una función pura que avanza cada minuto (probada en Vitest);
+  - al cambiar el día se vuelve a pedir `/kitchen/board`, y cada 10 min se concilia;
+  - Playwright: de 23:59 a 00:01 la tarjeta pasa a “Hoy” sin recargar; al pasar su `dueAt` aparece “Atrasado”.
+- **Sesión larga:** la prueba real va en `e2e.yml` (Q1) con `ACCESS_TOKEN_TTL_SECONDS=60`, espera de 75 s y verificación de que la cookie rotó, el SSE reconectó y “Listo” funciona. En `e2e-web` (Prism) la prueba se llama “reconexión SSE con reloj adelantado”.

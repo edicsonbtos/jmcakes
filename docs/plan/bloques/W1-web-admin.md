@@ -60,3 +60,12 @@ Mock con `MOCK_PORT=4011 api/scripts/mock.sh` y `NEXT_PUBLIC_API_URL=http://127.
 
 ## No tocar
 `src/app/(cocina)`, `src/components/{ui,cocina}`, archivos existentes de `src/lib`, `package.json`, `api/`, `android/`.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **Avisos al dueño aunque no tenga la pestaña abierta:**
+  - `/admin` instalable como PWA (`web/public/admin/manifest.webmanifest` + `sw.js`);
+  - **Web Push** (VAPID): suscripción por `POST /auth/device-tokens {app:'admin-web', webPushSubscription}`;
+  - al tocar `PAYMENT_REPORTED` se abre el pago; `READY_UNASSIGNED` abre el pedido.
+- **Ficha del cliente:** botón “Restablecer contraseña” (contraseña temporal para dictársela por WhatsApp).
+- **Métodos y cuentas:** sin botón de borrar (desactivar), según 06.

@@ -1,4 +1,4 @@
-# 02 — Modelo de datos (v2.1, convenciones OpenGravity)
+# 02 — Modelo de datos (v2.3, convenciones OpenGravity)
 
 FND implementa **todo** este modelo en la migración Alembic inicial. Los bloques siguientes no crean tablas; si una es indispensable, siguen el protocolo §4.
 
@@ -14,10 +14,10 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 ## Identidad
 | Tabla | Columnas clave |
 |---|---|
-| `users` | `role` (`UserRole`: ADMIN, PRODUCTION, DELIVERY, CUSTOMER), `phone` (`uq_users_phone` → `PHONE_TAKEN`, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `lastLoginAt` |
+| `users` | `role` (`UserRole`: ADMIN, PRODUCTION, DELIVERY, CUSTOMER), `phone` (`uq_users_phone` → `PHONE_TAKEN`, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `mustChangePassword`, `lastLoginAt` |
 | `refresh_tokens` | `userId`, `tokenHash` (único), `expiresAt`, `revokedAt`, `rotatedAt`, `replacedById`, `deviceLabel` (gracia de rotación de 60 s, 08) |
 | `idempotency_records` | `scope` (p. ej. `admin.payout`), `key`, `requestHash`, `responseJson`, `createdAt`; único `(scope, key)`. Para operaciones de admin sin tabla propia con llave (cargos, ajustes, devoluciones). |
-| `device_tokens` | `userId`, `fcmToken` (único), `app` (`cliente`/`delivery`), `lastSeenAt` |
+| `device_tokens` | `userId`, `app` (`cliente`/`delivery`/`admin-web`), `fcmToken` (único, null), `webPushSubscription` (JSON, null), `lastSeenAt` |
 
 ## Clientes — `customers`
 | Columna | Notas |
@@ -78,7 +78,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 ## Pagos
 **`payment_methods`** y **`bank_accounts`**: modelos de OpenGravity, con `bank_accounts.cashAccountId` (FK) agregado.
 
-**`payments`** (en OpenGravity no existían `reference`, `paidOn`, método, cuenta ni reverso: es **código nuevo** sobre su base)
+**`payments`** (base de estados reutilizada + columnas propias de la panadería)
 
 | Columna | Notas |
 |---|---|
@@ -98,7 +98,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 
 **`uq_payments_bank_account_reference_live`**: único `(bankAccountId, reference)` `WHERE status <> 'REJECTED' AND reference IS NOT NULL`. La transferencia la identifican la cuenta destino y la referencia; solo un rechazo libera la referencia.
 
-Prohibido el borrado físico de pagos: no se copia el `DELETE /payments/{id}` de OpenGravity.
+Prohibido el borrado físico de pagos.
 
 ## Billetera del cliente y cuentas por cobrar
 **`wallet_movements`** — **solo inserción**; la escribe únicamente `services/ledger.py`.

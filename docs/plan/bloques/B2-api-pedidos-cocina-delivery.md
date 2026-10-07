@@ -61,3 +61,9 @@ Todas en `api/tests/b2/`, con los dobles de FND (`event_spy`, `push_spy`, `money
   - OUT_FOR_DELIVERY emite `order.updated` a cocina; un pedido AWAITING reducido no llega a cocina.
 - Push con el adaptador falso.
 - Flujo ASAP completo con los stubs de B3.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **ASAP solo en horario** (03 §2): entre `openingTime` y `closingTime − minLeadMinutes`. Un ASAP confirmado tarde pasa a la apertura siguiente, sin “Atrasado”. Pruebas a las 05:59, 18:01 y 23:30 VET (E16).
+- **Push `READY_UNASSIGNED`** a los admin (Web Push) cuando un pedido queda READY sin motorizado.
+- `PushSender` envía también Web Push (VAPID, `pywebpush`) a `device_tokens.app = admin-web`. Sin llaves, solo log.

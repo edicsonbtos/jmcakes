@@ -4,7 +4,8 @@ Estados: `PENDIENTE` · `EN CURSO` · `LISTO PARA INTEGRAR` · `INTEGRADO` · `B
 
 | # | ID | Bloque | Fase | Estado | Rama | Handoff | Notas |
 |---|---|---|---|---|---|---|---|
-| — | PLAN | Plan v2 + spec + 2 auditorías | — | EN CURSO | `claude/happy-johnson-24innr` | — | Gate G0 |
+| — | PLAN | Plan v2.3 + spec + auditorías 1, 2 y 2b | — | LISTO (G0) | `claude/happy-johnson-24innr` | `docs/plan/AUDITORIAS.md` | 131 hallazgos aplicados; spec 34/34 |
+| — | G0.5 | Dirección visual (Impeccable) con el dueño | — | PENDIENTE | — | — | Requiere al dueño |
 | 1 | FND | Fundación API, BD, contrato | 0 | PENDIENTE | `block/FND` | — | |
 | 2 | DSN | Diseño Impeccable + base web | 0 | PENDIENTE | `block/DSN` | — | |
 | 3 | B1 | API catálogo, clientes, config | 1 | PENDIENTE | `block/B1` | — | |

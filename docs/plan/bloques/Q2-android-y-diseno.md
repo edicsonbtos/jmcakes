@@ -21,3 +21,9 @@ Las dos apps compilan y pasan sus pruebas en GitHub Actions, alineadas con la AP
 
 ## Definición de terminado
 `android.yml` verde en el último commit, con más de 0 pruebas en `app-cliente`. APKs como artifacts. Auditoría de diseño sin críticos.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- Antes de generar el AAB, verificar `targetSdk` contra el requisito vigente de Play (hoy, 36).
+- **Pasos de Play Console:** URL de política de privacidad (`/privacidad`), URL de eliminación de cuenta (`/eliminar-cuenta`) y formulario **Data safety**.
+- Las auditorías Impeccable de Android usan `--target android/app-*` (plataforma `android`) y las de la web usan `--target web/src/app/(admin)|(cocina)` (plataforma `web`).

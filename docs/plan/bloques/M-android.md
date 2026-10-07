@@ -62,3 +62,21 @@ FCM va detrás de un flag: sin `google-services.json`, el push se apaga y la app
 
 ## No tocar
 `api/`, `web/`, `contracts/` (solo lectura).
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **Gradle que funcione sin SDK:**
+  - `settings.gradle.kts` incluye `:core:designsystem`, `:app-cliente` y `:app-delivery` **solo si hay SDK** (`ANDROID_HOME` o `sdk.dir`);
+  - AGP no va en el `plugins {}` raíz, sino en el version catalog, y se aplica solo en los módulos Android;
+  - `core/data` **sin androidx**: `SessionStore` es una interfaz con implementación en memoria para pruebas, y la de DataStore vive en las apps;
+  - prueba: `gradle :core:network:test :core:data:test` corre sin `ANDROID_HOME`.
+- **Versiones:** `compileSdk = 36`, `targetSdk = 36` (requisito de Play desde el 31-08-2026), `minSdk = 24`. AGP 8.13.x, Gradle wrapper **8.14.3** (`gradle wrapper --gradle-version 8.14.3`), Kotlin 2.2.x, KSP del mismo Kotlin y Hilt compatible.
+- **Datos móviles y mala señal:**
+  - Coil con `diskCacheKey = fileId` y miniaturas;
+  - catálogo usable sin fotos;
+  - comprobante comprimido antes de subir (lado mayor de 1600 px, JPEG 80 %, ~300 KB) con reintento;
+  - cliente: refresco al volver a primer plano, deslizar para actualizar y *polling* de 60 s en primer plano mientras haya un pedido activo o un pago en revisión, con “Actualizado hace X min”;
+  - delivery: la última respuesta de `GET /delivery/orders` se guarda en `core/data` y se muestra sin conexión (“Sin conexión — datos de las HH:MM”); las acciones en cola se aplican de forma optimista con “Pendiente de enviar”. Pruebas JVM de esa caché.
+- **Horario:** “Lo quiero hoy” se desactiva fuera de `openingTime`…`closingTime − minLeadMinutes`, y se preselecciona “Programar” para mañana. En “Pago en revisión” se muestra el horario de verificación.
+- **Cuenta:** “¿Olvidaste tu contraseña? Escríbenos por WhatsApp” (deep link con el teléfono). Si `mustChangePassword`, se pide una nueva contraseña al entrar. Enlace a `/privacidad` en Perfil.
+- `impeccable context --target android/app-cliente` (y `app-delivery`) usa `android/PRODUCT.md`.

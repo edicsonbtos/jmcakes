@@ -15,6 +15,14 @@ DSN  Impeccable + web base┴─▶ int ─▶ B2  pedidos · agenda · cocina �
                                      M   Android (cliente + delivery) ──(entrega temprana: el orquestador publica y CI compila)
 ```
 
+## G0.5 — Dirección visual (orquestador + dueño, antes de lanzar DSN)
+Impeccable exige que el **dueño** elija la dirección visual. Un agente desatendido no puede hacerlo. Pasos del orquestador:
+1. Ejecuta `impeccable context` y hace con el dueño la ronda de preguntas de `new-work` §2, con la herramienta de preguntas estructuradas.
+2. Corre `concept-seed --scope direction` y le presenta las opciones al dueño (con re-roll si lo pide).
+3. Fija `.impeccable/config.json` = `{"buildPath":"code"}`: el flujo con comps necesita un navegador que el contenedor no tiene.
+4. Registra el contrato de dirección y el *seed key* con `impeccable surface-brief write` para `web/src/app/(admin)`, `web/src/app/(cocina)`, `android/app-cliente` y `android/app-delivery`.
+5. Para W1, W2 y M, en G1, corre `concept-seed --scope surface` con el dueño. Si el dueño no está disponible, el agente construye la primera estructura de la tirada y lo deja registrado en el brief para revisión.
+
 ## Los 10 agentes y sus carpetas propias
 | # | ID | Fase | Escribe en (además de `docs/handoffs/<ID>.md`) | Ficha |
 |---|---|---|---|---|

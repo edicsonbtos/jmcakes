@@ -31,6 +31,8 @@
 | E11 | Día de Caracas: pago aprobado a las 22:30 VET cuenta en ese día (dashboard y cierre) | — | B3 | ✅ |
 | E11b | Aprobar el día 1 y revertir el día 2 no cambia el ingreso del día 1; el reverso aparece el día 2 | — | B3 | ✅ |
 | E15 | Concurrencia de refresh (dos refresh simultáneos y reintento dentro de la gracia) | — | FND | ✅ |
+| E16 | ASAP fuera de horario → INVALID_SCHEDULE; ASAP confirmado tarde → apertura siguiente | — | B2 | ✅ |
+| E17 | Sesión larga de cocina (TTL 60 s en E2E): sigue operando, cookie rotada, SSE reconectado | — | — | ✅ (e2e.yml) |
 | E12 | Autorización por rol y propiedad; cocina y delivery sin dinero | — | FND (arnés) + cada B | ✅ |
 | E13 | Bloqueo, condonar/anular, devolución de saldo, reducción | ✅ | B3 · B2 | ✅ |
 | E14 | Tasa: `rate_for` (MANUAL > BCV > última ≤ d), RATE_UNAVAILABLE, pago con los Bs exactos mostrados → CONFIRMED | — | FND (`rate_for`) · B3 | ✅ |
@@ -45,7 +47,7 @@
 | Errores | Prueba: `core/errors.py` ⊇ `spec.ERROR_CODES` | |
 | Web | Vitest + Testing Library (local) · **Playwright en GitHub Actions** (`web.yml`: job `e2e-web` contra Prism; `e2e.yml`: contra la API + Postgres) | Local: `npm run lint && npm test && npm run build && npx playwright test --list`. Las capturas se suben como artifact y el orquestador las baja a `docs/handoffs/assets/`. |
 | Diseño | `sh .claude/skills/impeccable/scripts/impeccable detect --json <rutas>` | Sin críticos. |
-| Android | Local: `gradle :core:network:test :core:data:test` (módulos JVM). CI: `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug :app-cliente:testMockDebugUnitTest :app-delivery:testMockDebugUnitTest :core:network:test :core:data:test :core:designsystem:testDebugUnitTest` | Reportes `**/build/test-results/**` como artifact. En G3, más de 0 pruebas en `app-cliente`. |
+| Android | Local: `gradle :core:network:test :core:data:test` (módulos JVM puros, sin SDK; los módulos Android se excluyen si no hay `ANDROID_HOME`). CI: `./gradlew :app-cliente:assembleMockDebug :app-delivery:assembleMockDebug :app-cliente:testMockDebugUnitTest :app-delivery:testMockDebugUnitTest :core:network:test :core:data:test :core:designsystem:testDebugUnitTest` | Reportes `**/build/test-results/**` como artifact. En G3, más de 0 pruebas en `app-cliente`. |
 | E2E de sistema | `e2e/run_scenarios.py` (recibe `DATABASE_URL`; solo arranca Postgres si no se le pasa) + uvicorn + seed | E1–E3 y E5–E14 por HTTP, más el stream SSE real. |
 | Secretos | `gitleaks` (`secrets.yml`) | Sin hallazgos. |
 
@@ -53,9 +55,9 @@
 | Gate | Responsable | Condición |
 |---|---|---|
 | **G0** fin del plan | orquestador | `spec` verde · 2 auditorías aplicadas · CLAUDE.md coherente con v2. |
-| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las **104 operaciones** del inventario de 08; cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
+| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las **105 operaciones** del inventario de 08; cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
 | **G2** fin de Fase 1 (6 agentes) | orquestador | Cada rama con sus pruebas verdes y su handoff · `git diff --stat` dentro de sus carpetas · tras integrar: suite completa verde, `alembic heads` = 1, contrato y `api-types.ts` regenerados · **CI verde en `api.yml`, `contract.yml`, `secrets.yml` y `web.yml` (lint/test/build)**. `e2e-web` y `android.yml` pueden quedar en rojo: sus fallas se registran en STATUS.md y pasan a G3 (Q1 la web, Q2 Android). |
-| **G3** fin de Fase 2 | orquestador + Q1/Q2 | E2E E1–E14 verdes en CI · staging: `/api/health` OK, `get_database_tables` con las tablas de 02, `alembic_version` = head, login de admin en la web de staging · `android.yml` verde con pruebas > 0 · auditor contable y `/security-review` sin hallazgos altos · `impeccable detect`/`audit` sin críticos. |
+| **G3** fin de Fase 2 | orquestador + Q1/Q2 | E2E E1–E14 verdes en CI · staging: `/api/health` OK, `get_database_tables` con las tablas de 02, `alembic_version` = head, login de admin en staging verificado por `curl` (API y página de login) y por el job `staging-smoke` · `android.yml` verde con pruebas > 0 · auditor contable y `/security-review` sin hallazgos altos · `impeccable detect`/`audit` sin críticos. |
 
 ## 5. Datos
 - `api/scripts/bootstrap.py` es idempotente. Si hay `BOOTSTRAP_ADMIN_PHONE`/`PASSWORD` y no existe ningún ADMIN, lo crea. Si `SEED_DEMO=1`, ejecuta `seed.py`. Corre en el `preDeployCommand`.

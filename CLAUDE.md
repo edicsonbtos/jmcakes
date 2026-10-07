@@ -38,7 +38,7 @@ Reutiliza **OpenGravity** (`/home/user/opengraviti` en el entorno de agentes). A
 13. **Acciones destructivas** en Neon, Railway o producción: confirmar con el humano.
     - Neon: solo el proyecto `jmcakes` (`square-poetry-91370020`). Nunca otro proyecto u organización.
 14. **Agentes del enjambre:** no hacen push ni PR, no editan `docs/plan/STATUS.md` y usan su propia base de pruebas y sus puertos (`docs/plan/05-protocolo-agentes.md` §1). Integra el orquestador.
-15. **Código copiado de OpenGravity**, que es privado (este repo es público): sanearlo antes de copiar. Sin comentarios de incidentes ni nombres de producción (`docs/plan/06` §Reglas).
+15. **Código copiado de OpenGravity**, que es privado (este repo es público): leer antes `/home/user/panaderia-privado/NO-COPIAR-OPENGRAVITY.md` y sanear. Ni el código ni los documentos describen defectos de OpenGravity (`docs/plan/06` §Reglas).
 
 ## Comandos
 > FND completa esta sección con los comandos reales.
@@ -51,8 +51,8 @@ pip install -r spec/requirements.txt && python -m pytest spec -q   # modelo ejec
 ## Entorno de la nube (verificado el 2026-10-06)
 - **Lenguajes y Android:**
   - Python 3.11, Node 22, Java 21 y Gradle disponibles.
-  - **Sin Android SDK ni KVM** (`dl.google.com` bloqueado): Android se compila en GitHub Actions.
+  - **Sin Android SDK ni KVM** (`dl.google.com` bloqueado y `maven.google.com` redirige allí): AGP y androidx no se resuelven aquí. En local solo los módulos JVM puros; lo demás compila en GitHub Actions.
 - **Base de datos:**
   - PostgreSQL 16 local: `service postgresql start`; rol `dev`/`dev`; una base por agente (`panaderia_test_<id>`).
   - **Sin salida a Neon:5432**: usa el MCP de Neon; las migraciones en Neon las aplica Railway (`preDeployCommand`).
-- **Red:** npm, PyPI, Maven Central, `maven.google.com` y el portal de plugins de Gradle están accesibles. **Playwright no puede descargar navegadores**: sus pruebas se escriben en local y corren en GitHub Actions.
+- **Red:** npm, PyPI, Maven Central y el portal de plugins de Gradle están accesibles. **Playwright no puede descargar navegadores**: sus pruebas se escriben en local y corren en GitHub Actions.

@@ -16,11 +16,11 @@ Reglas exactas para B2 (pedidos) y B3 (dinero).
 
 Se usa **igual** para mostrar Bs (`d` = hoy en Caracas) y para convertir un pago (`d = paidOn`). La sincronización con DolarAPI (`sync_daily_rate`) solo ocurre en el job y en `POST /admin/rates/sync`, cada uno con su propia sesión. Nunca dentro de una transacción de dinero.
 
-**Prohibido** (defectos de OpenGravity que no se copian):
-- usar 1.0 como tasa de respaldo;
-- reconvertir en el ledger un monto que ya viene convertido;
-- `get_rate_at_date` solo para BCV;
-- el caché por instancia.
+Reglas de la tasa:
+- **Nunca hay una tasa de respaldo inventada.** Si no existe ninguna → `RATE_UNAVAILABLE`.
+- Un monto ya convertido **no se reconvierte**.
+- La fila BCV de un día se **inserta una sola vez** (si ya existe, no se toca); las correcciones se hacen con una tasa MANUAL.
+- El fetcher solo acepta la respuesta JSON oficial.
 
 Los Bs mostrados (`priceVes`, `totalVes`, `amountDueVes`) se calculan en el servidor con `ROUND_HALF_UP` a 2 decimales y **no se guardan**: se recalculan en cada consulta.
 
@@ -43,7 +43,9 @@ Validaciones al crear o cotizar, todas del servidor (`MoneyService.assert_can_or
 - **Cliente CASH con cualquier CxC abierta** (por reverso de pago, cargo manual o crédito anterior) → `422 OPEN_DEBT` con `meta.debt`. Primero paga la deuda (recarga o abono): un cliente de contado no acumula deuda.
 - **Líneas:** producto publicado y disponible, `qty ≥ minQty`, precio del servidor. Errores `PRODUCT_UNAVAILABLE` y `BELOW_MIN_QTY` (con el producto en `meta`). Sin líneas: `EMPTY_ORDER`.
 - **Tipo de entrega:**
-  - `fulfillmentType = ASAP` → `dueAt = ahora`; se recalcula a la hora de confirmación.
+  - `fulfillmentType = ASAP` → `dueAt = ahora`; se recalcula a la hora de confirmación. **Solo se acepta ASAP si la hora de Caracas está entre `openingTime` y `closingTime − minLeadMinutes`.** Si no: `422 INVALID_SCHEDULE` “Ya no podemos entregar hoy. Programa tu pedido para mañana.”
+  - Si un ASAP se **confirma** (pago aprobado) después de `closingTime − minLeadMinutes`, su `dueAt` pasa al siguiente `openingTime`, sin marca de “Atrasado”, y el push dice “Tu pedido #N se prepara mañana a primera hora”. **Solo se acepta ASAP si la hora de Caracas está entre `openingTime` y `closingTime − minLeadMinutes`.** Si no: `422 INVALID_SCHEDULE` “Ya no podemos entregar hoy. Programa tu pedido para mañana.”
+  - Si un ASAP se **confirma** (pago aprobado) después de `closingTime − minLeadMinutes`, su `dueAt` pasa al siguiente `openingTime`, sin marca de “Atrasado”, y el push dice “Tu pedido #N se prepara mañana a primera hora”.
   - `SCHEDULED` → el cliente envía `dueAt` (fecha+hora de Caracas). Debe cumplir `≥ ahora + orders.minLeadMinutes`, `≤ hoy + orders.maxDaysAhead` y hora entre `openingTime` y `closingTime`. Si no: `422 INVALID_SCHEDULE` con el motivo legible.
 - `total = Σ líneas + delivery.feeUsd`.
 - **Idempotencia:** `Idempotency-Key` obligatorio, único por `(customerId, idempotencyKey)`.
@@ -91,7 +93,7 @@ Propósitos: `ORDER` (paga el faltante de un pedido) y `WALLET_TOPUP` (recarga).
    - **USD:** `amountUsd = amountLocal`.
 5. **Referencia única por cuenta destino** (`bankAccountId` + `reference`) entre pagos no rechazados: cubre PENDING_REVIEW, IN_REVIEW, APPROVED y **REVERSED**. Si se repite: `409 DUPLICATE_REFERENCE`.
 6. Comprobante: `proofFileId` debe ser un archivo `PAYMENT_PROOF` del mismo usuario (`FileService.assert_owned`).
-7. `status = PENDING_REVIEW`. El pedido muestra `hasPaymentInReview`. Evento `payment.reported` al admin.
+7. `status = PENDING_REVIEW`. El pedido muestra `hasPaymentInReview`. Evento `payment.reported` y **push `PAYMENT_REPORTED` a los admin** (Web Push). La app le muestra al cliente el horario en que se verifican los pagos.
 8. **No se mueve dinero.** Idempotencia igual que en los pedidos.
 
 ### 3.4 Aprobar un pago (admin)
@@ -275,7 +277,7 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 | `FILE_INVALID` | 422 | El archivo debe ser una imagen o PDF de hasta 5 MB. |
 | `PAYMENT_ACCOUNT_MISMATCH` | 422 | La cuenta elegida no corresponde a ese método o moneda. |
 | `PRICE_PREVIEW_EXPIRED` | 409 | La vista previa venció o los precios cambiaron. Genera una nueva. |
-| `PHONE_TAKEN` | 409 | Ese teléfono ya está registrado. Inicia sesión. |
+| `PHONE_TAKEN` | 409 | Ese teléfono ya está registrado. Inicia sesión o escríbenos si olvidaste tu contraseña. |
 | `RATE_LIMITED` | 429 | Demasiados intentos. Espera un minuto. |
 | `UNAUTHENTICATED` | 401 | Tu sesión expiró. Inicia sesión de nuevo. |
 | `VALIDATION_ERROR` | 422 | Revisa los datos: <detalle>. |

@@ -31,7 +31,7 @@ Definir el mundo visual de la panadería y dejarlo listo en código (web) y en e
      - Server Action de login que guarda las cookies httpOnly `authToken` y `refreshToken`;
      - `src/app/api/auth/refresh/route.ts`, `src/app/api/auth/token/route.ts` y logout;
      - `src/proxy.ts` con roles por ruta y redirección a refresh, sin `console.log`;
-     - **no** copiar `set-token`.
+     - ninguna ruta recibe tokens desde el navegador.
    - **`src/lib/`:**
      - `api.ts` y `client-api.ts`: base `NEXT_PUBLIC_API_URL`, conservan `detail` y `code`, reintentan una vez tras un 401 vía refresh;
      - `format.ts` (Caracas): `fmtUsd`, `fmtBs`, `fmtDate`, `fmtTime` y `fmtDateBig`;
@@ -62,3 +62,20 @@ Definir el mundo visual de la panadería y dejarlo listo en código (web) y en e
 - `DESIGN.md`, `tokens.json`, `android-theme.md` y las 4 especificaciones.
 - `npm ci && npm run lint && npm test && npm run build && npx playwright test --list` en verde (salida en el handoff).
 - `impeccable detect` sin críticos.
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **La dirección visual ya está elegida por el dueño** en el paso G0.5 (04): contrato de dirección y *seed key* registrados en `.impeccable/surfaces/*.md` y `.impeccable/config.json` (`buildPath: code`).
+  - DSN **no vuelve a tirar** la dirección: la recibe.
+  - Corre `impeccable context --target "web/src/app/(admin)"` y `--target "web/src/app/(cocina)"`. `PRODUCT.md` raíz = plataforma `web`; `android/PRODUCT.md` = `android`.
+- **Orden correcto de new-work** (reemplaza “escribir DESIGN.md primero”):
+  1. construir tokens, `globals.css`, el UI kit, `/design` y **una pantalla de muestra por superficie** (tarjeta de cocina a 1920×1080, bandeja de pagos a 390 px);
+  2. commit y aviso al orquestador. El orquestador publica `block/DSN`, `web.yml` captura a 1440 y 390 px y el orquestador baja las capturas a `.impeccable/review/`;
+  3. el orquestador lanza `impeccable-finish-reviewer` (sin historial), y DSN aplica **una** ronda de correcciones;
+  4. `impeccable-documenter` escribe `DESIGN.md` y su sidecar **a partir de lo construido**.
+
+  `docs/design/*.md` sigue siendo la especificación de pantallas. `.impeccable/review/` y `.impeccable/mocks/` van en `.gitignore`.
+- **Páginas públicas** (exigidas por Play Store), con nombre y WhatsApp desde `/settings/public` y exentas en `proxy.ts`:
+  - `web/src/app/(publico)/privacidad/page.tsx`: datos guardados (teléfono, dirección, comprobantes y token de push);
+  - `/eliminar-cuenta`: cómo borrar la cuenta en la app, más el botón “Escribir por WhatsApp”.
+- **`web/package-lock.json`** generado y commiteado. `next`, `react` y `react-dom` en versión exacta. Ver 06 §Web para los archivos base adicionales.

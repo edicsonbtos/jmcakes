@@ -4,9 +4,9 @@
 
 ## Platform
 
-web
+android
 
-Esta raíz describe las superficies web (panel y cocina). Las apps nativas tienen su propio `android/PRODUCT.md` con plataforma `android`. Las cuatro superficies sobre una sola API:
+Este archivo cubre las apps nativas (cliente y motorizado). El `PRODUCT.md` raíz cubre las superficies web. Las cuatro superficies sobre una sola API:
 
 - **Panel del administrador**: web (escritorio y teléfono).
 - **Pantalla de producción (cocina)**: web en tablet o TV, fija en la pared.

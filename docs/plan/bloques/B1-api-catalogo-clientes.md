@@ -43,3 +43,13 @@ Pedidos y dinero (B2/B3), `db_models.py`, `interface.py`, `main.py`, `web/`, `an
 - Configuración: validaciones.
 - `/catalog` con y sin tasa.
 - Bloquear invoca `cancel_for_block` (verificado con un doble).
+
+
+## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior
+- **Imágenes de producto:**
+  - al subir, Pillow genera un WebP de 800 px como máximo (< 120 KB) y una miniatura de 320 px;
+  - se sirven por `GET /files/{id}/public?v=<hash>` (estable, `immutable`) y `imageUrl` apunta ahí;
+  - la firma queda solo para PAYMENT_PROOF;
+  - pruebas: tamaño de la miniatura y URL igual entre dos `GET /catalog`.
+- **`reset-password` también para CUSTOMER:** contraseña temporal, revoca los refresh, `mustChangePassword`. Prueba: un CUSTOMER no puede resetear a otro.
+- **Auditoría:** repositorio reescrito (cursor por `(createdAt, id)`, filtro de actor con JOIN a `users`).

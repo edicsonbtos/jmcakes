@@ -55,3 +55,11 @@
 4. **Firma Android:** generar los keystores y cargarlos como secretos de GitHub.
 5. **Dominio propio** (opcional).
 6. **Datos reales:** catálogo, precios, métodos de pago con sus cuentas, clientes y deudas actuales (CSV).
+
+7. **Entorno `production`** en Railway y la rama `main` de Neon: aprobar su creación antes del primer despliegue a producción.
+8. **Llaves VAPID** (Web Push al panel): las genera el orquestador. Solo hace falta que el dueño instale el panel como app (PWA) en su teléfono y acepte las notificaciones.
+
+## Exposición del código privado (importante)
+Los primeros commits de este repo **público** ya publicaron, en `docs/plan/`, descripciones de defectos concretos del código de OpenGravity. Desde la v2.3 esos detalles se movieron a una nota privada fuera del repo, pero **siguen en el historial de git**. Opciones (todas requieren tu decisión):
+- **(Recomendado)** Hacer privado el repo `jmcakes` y corregir esos puntos en OpenGravity.
+- Reescribir la historia del repo para borrarlos (acción destructiva: solo con tu autorización expresa).

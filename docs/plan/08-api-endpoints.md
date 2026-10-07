@@ -26,7 +26,7 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `POST /auth/refresh` | P | `{refreshToken}` → par nuevo. **Gracia de 60 s**: un token rotado hace menos de `REFRESH_GRACE_SECONDS` todavía emite un par nuevo, lo que cubre la concurrencia y las respuestas perdidas. Pasado ese margen, `401 UNAUTHENTICATED`. |
 | `POST /auth/logout` | C A K D | |
 | `GET /auth/me` | C A K D | `{user, customer?}` |
-| `POST /auth/device-tokens` · `DELETE /auth/device-tokens/{token}` | C D | `{fcmToken, app}` |
+| `POST /auth/device-tokens` · `DELETE /auth/device-tokens/{token}` | C D A | `{app: cliente\|delivery\|admin-web, fcmToken?, webPushSubscription?}` (admin-web = Web Push VAPID) |
 | `DELETE /auth/account` | C | Anonimiza y desactiva; conserva la contabilidad. |
 
 ## B1
@@ -38,13 +38,14 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `POST /admin/products/bulk-price/preview` · `POST /admin/products/bulk-price/apply` | `catalog.py` | A | `{productIds?, categoryId?, mode: PERCENT\|AMOUNT, value, roundTo?}` → `{rows[{productId, name, oldPrice, newPrice}], previewToken}` · `apply {previewToken}`. Si el token venció o cambió el estado → `409 PRICE_PREVIEW_EXPIRED`. |
 | `GET /admin/products/{id}/price-history` | `catalog.py` | A | |
 | `POST /files` | `files.py` | C A | Multipart `{file, purpose}` → `{id, purpose, contentType, sizeBytes}`. Si no es válido → `422 FILE_INVALID`. PRODUCT_IMAGE solo A. |
-| `GET /files/{id}/url` | `files.py` | C A | `{url, expiresAt}`. PRODUCT_IMAGE: C y A. PAYMENT_PROOF: su dueño y A. |
+| `GET /files/{id}/url` | `files.py` | C A | `{url, expiresAt}`. PAYMENT_PROOF: su dueño y A. |
+| `GET /files/{id}/public` | `files.py` | P | Solo PRODUCT_IMAGE, ya convertida a WebP (máx. 800 px) y miniatura (`?size=thumb`, 320 px). URL estable `?v=<hash>` con `Cache-Control: public, max-age=31536000, immutable`. `imageUrl` del catálogo apunta aquí. |
 | `GET /files/{id}/local` | `files.py` | P (firmada) | `?exp=&sig=` con `sig = HMAC(JWT_SECRET, id\|exp)` y TTL de 1 h; firma inválida o vencida → 403. Solo con `STORAGE_BACKEND=local`. Así `<img>` y Coil cargan sin Bearer. |
 | `GET /me/profile` · `PATCH /me/profile` | `profile.py` | C | |
 | `GET /admin/customers` · `POST /admin/customers` · `GET /admin/customers/{id}` · `PATCH /admin/customers/{id}` | `customers.py` | A | Filtros: `query`, `type`, `paymentMode`, `hasDebt`, `blocked`. Columnas `walletBalance`, `openDebt`, `overdueDebt` (de `FinanceQueries`). |
 | `POST /admin/customers/{id}/credit` | `customers.py` | A | `{paymentMode, creditLimit, creditDays}` |
 | `POST /admin/customers/{id}/block` · `POST /admin/customers/{id}/unblock` | `customers.py` | A | `block {reason}` |
-| `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/{id}` · `POST /admin/users/{id}/reset-password` | `users.py` | A | |
+| `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/{id}` · `POST /admin/users/{id}/reset-password` | `users.py` | A | `reset-password` también para CUSTOMER: contraseña temporal, revoca refresh, `mustChangePassword = true`. |
 | `GET /settings/public` | `settings.py` | P | `{businessName, phone, whatsapp, address, openingTime, closingTime, minLeadMinutes, maxDaysAhead, deliveryFeeUsd, minPayWindowMinutes, minVersionCliente, minVersionDelivery}` |
 | `GET /admin/settings` · `PATCH /admin/settings` | `settings.py` | A | Por secciones; si algo no es válido → `422 INVALID_SETTINGS`. |
 | `GET /admin/audit` | `audit.py` | A | Filtros: `entity`, `entityId`, `actor`. |
@@ -85,7 +86,7 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `GET /rates/today` | `rates.py` | P | `Rate`, o `409 RATE_UNAVAILABLE`. |
 | `GET /admin/rates` · `POST /admin/rates/manual` · `POST /admin/rates/sync` | `rates.py` | A | `manual {date, value}` |
 | `GET /payment-methods` | `payment_methods.py` | C A | `[{id, name, type, currency, instructions, fields, accounts[{id, label, data, isDefault}]}]` (todas las cuentas activas). |
-| `GET /admin/payment-methods` · `POST /admin/payment-methods` · `PATCH /admin/payment-methods/{id}` | `payment_methods.py` | A | |
+| `GET /admin/payment-methods` · `POST /admin/payment-methods` · `PATCH /admin/payment-methods/{id}` | `payment_methods.py` | A | El PATCH incluye `isActive` y `displayOrder` (no hay DELETE). |
 | `GET /admin/bank-accounts` · `POST /admin/bank-accounts` · `PATCH /admin/bank-accounts/{id}` | `payment_methods.py` | A | Con `cashAccountId`. |
 | `POST /payments` | `payments.py` | C | `Idempotency-Key`. `{purpose: ORDER\|WALLET_TOPUP, orderId?, paymentMethodId, bankAccountId, localCurrency, amountLocal, reference, paidOn, senderName?, proofFileId?}`. Si la cuenta no corresponde al método o la moneda → `422 PAYMENT_ACCOUNT_MISMATCH`. |
 | `GET /payments` · `GET /payments/{id}` | `payments.py` | C | Propios. |
@@ -141,6 +142,8 @@ data: {}
 | `PAYMENT_APPROVED` | cliente | “Pago aprobado: +$X” (+ “te falta $Y, tienes hasta HH:MM” si aplica) | `paymentId`, `orderId?` |
 | `PAYMENT_REJECTED` | cliente | “Pago rechazado: <motivo>. Tienes hasta HH:MM” | `paymentId`, `orderId?` |
 | `CREDIT_ENABLED` | cliente | “Tienes crédito disponible de $X” | — |
+| `PAYMENT_REPORTED` | admin (Web Push) | “Pago por verificar: $X de <cliente>” | `paymentId` |
+| `READY_UNASSIGNED` | admin (Web Push) | “Pedido #N listo sin motorizado” | `orderId` |
 | `DELIVERY_ASSIGNED` | motorizado | “Nuevo pedido #N para <cliente>” | `orderId` |
 
 M navega según `type`. B1, B2 y B3 prueban el envío con `push_spy`.
@@ -194,7 +197,7 @@ POST /api/v1/auth/register|login|refresh|logout · GET /api/v1/auth/me · POST /
 GET /api/v1/catalog
 GET|POST /api/v1/admin/categories · PATCH /api/v1/admin/categories/{id}
 GET|POST /api/v1/admin/products · GET|PATCH /api/v1/admin/products/{id} · POST /api/v1/admin/products/bulk-price/preview · POST /api/v1/admin/products/bulk-price/apply · GET /api/v1/admin/products/{id}/price-history
-POST /api/v1/files · GET /api/v1/files/{id}/url · GET /api/v1/files/{id}/local
+POST /api/v1/files · GET /api/v1/files/{id}/url · GET /api/v1/files/{id}/local · GET /api/v1/files/{id}/public
 GET|PATCH /api/v1/me/profile
 GET|POST /api/v1/admin/customers · GET|PATCH /api/v1/admin/customers/{id} · POST /api/v1/admin/customers/{id}/credit|block|unblock
 GET|POST /api/v1/admin/users · PATCH /api/v1/admin/users/{id} · POST /api/v1/admin/users/{id}/reset-password
@@ -217,4 +220,4 @@ GET /api/v1/admin/dashboard/summary · GET /api/v1/admin/dashboard/top-products
 GET /api/v1/admin/closures · GET /api/v1/admin/closures/{date} · GET /api/v1/admin/closures/{date}/pdf · POST /api/v1/admin/closures/{date}/run
 GET /api/v1/admin/export/{kind}
 ```
-`a|b` sobre la misma ruta base significa una operación por variante. Total: **104 operaciones**. FND las cuenta con `export_openapi.py --count`.
+`a|b` sobre la misma ruta base significa una operación por variante. Total: **105 operaciones**. FND las cuenta con `export_openapi.py --count`.

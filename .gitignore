@@ -27,3 +27,5 @@ google-services.json
 # Impeccable / herramientas locales
 .impeccable/live/
 graphify-out/
+.impeccable/review/
+.impeccable/mocks/

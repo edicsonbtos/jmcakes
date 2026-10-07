@@ -16,9 +16,9 @@ Navegador ───────────┘  cookies httpOnly      │      S
 | API | Python **3.11** (fijado en `api/.python-version` y CI), FastAPI, SQLAlchemy 2.0 async, **driver único `postgresql+psycopg`** (asyncpg prohibido), Pydantic v2. |
 | Migraciones | Alembic. **`alembic/env.py` usa `DATABASE_URL_DIRECT`** (Neon sin `-pooler`) si existe. Railway: `preDeployCommand = "alembic upgrade head && python -m scripts.bootstrap"`. |
 | Conexión app | `DATABASE_URL` (Neon **-pooler**); si el host contiene `-pooler` → `connect_args={"prepare_threshold": None}` (PgBouncer transaccional). |
-| Proceso | `python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips='*'` · `numReplicas = 1` (scheduler y bus de eventos en memoria). |
+| Proceso | Railway con builder **RAILPACK** (`api/.python-version` = 3.11). `startCommand = "python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers"` · `numReplicas = 1` (scheduler y bus en memoria) · región **us-east4**, junto a Neon us-east-1. |
 | Jobs | APScheduler `AsyncIOScheduler(timezone="America/Caracas")` en el lifespan; envoltorio `safe_job(name, fn)` (sesión propia, commit/rollback, log). `SCHEDULER_ENABLED=false` en tests, E2E y CI. |
-| Rate limit | slowapi con `key_func` = primer `X-Forwarded-For` (respaldo `client.host`); login limitado por **IP + teléfono**. |
+| Rate limit | slowapi con `key_func` = cabecera **`X-Real-IP`** del edge de Railway (respaldo `client.host`); **nunca** el primer `X-Forwarded-For`. Límite por teléfono dentro del handler de login. El login vía Server Action web llega con la IP del servicio web: ahí manda el límite por teléfono. |
 | Tests API | pytest + pytest-asyncio (strict, loop de sesión) + **Postgres 16 real** (local o servicio de CI), **una base por agente** (`panaderia_test_<id>`), esquema por `alembic upgrade head` (nunca `create_all`). |
 | Contrato | OpenAPI generado por FastAPI → `contracts/openapi.json` (`api/scripts/export_openapi.py`, `--check` en CI). Mock: Prism. |
 | Web | Next.js 16.2.2, React 19.2.4, Tailwind 4, Vitest; Playwright **se ejecuta en GitHub Actions** (el contenedor no puede descargar navegadores). |
@@ -70,11 +70,11 @@ jmcakes/
 ## Autenticación
 - `users.role` ∈ {ADMIN, PRODUCTION, DELIVERY, CUSTOMER}; login por teléfono + contraseña (bcrypt).
 - Access JWT HS256 **30 min** (`sub`, `role`, `cid`) · refresh rotativo 30 días (hash en `refresh_tokens`), con **gracia de 60 s** (`REFRESH_GRACE_SECONDS`) para refresh concurrentes o respuestas perdidas. La ruta web `/api/auth/refresh` serializa las llamadas por cookie, y el `Authenticator` de Android está sincronizado.
-- **Web** (corrige el patrón de OpenGravity, que no tenía refresh):
+- **Web** (sesión con refresh):
   - Server Action de login guarda **`authToken` y `refreshToken`** en cookies httpOnly, SameSite=Lax, path `/`.
   - `src/app/api/auth/refresh/route.ts` llama `POST /api/v1/auth/refresh` y rota ambas cookies.
   - `src/proxy.ts`: si el access venció y hay `refreshToken` → redirige a `/api/auth/refresh?next=…`; verifica rol por ruta (`/admin/**` ADMIN; `/cocina/**` PRODUCTION|ADMIN). Sin `console.log`.
-  - `src/app/api/auth/token/route.ts` (solo mismo origen) entrega al JS un access **fresco** (refresca si quedan < 5 min) para llamadas `Bearer` a la API y para pedir token de SSE. No se copia `set-token` de OpenGravity.
+  - `src/app/api/auth/token/route.ts` (solo mismo origen) entrega al JS un access **fresco** (refresca si quedan < 5 min) para llamadas `Bearer` a la API y para pedir token de SSE. No existe ninguna ruta que reciba un token desde el navegador.
   - `client-api`: ante 401 llama `/api/auth/refresh` una vez y reintenta; si falla → `/login`.
 - **Android**: Bearer + interceptor de refresh (OkHttp `Authenticator`).
 - **Modo mock** (Prism): los `example` de `accessToken` son JWT HS256 reales firmados con `JWT_SECRET=dev-mock-secret-no-usar-en-prod`, `role=ADMIN`, `exp` 2099, para que el proxy deje pasar en W1/W2.
@@ -98,6 +98,10 @@ jmcakes/
 | api | `FCM_CREDENTIALS_JSON` | opcional; vacío = push solo a log |
 | api | `SCHEDULER_ENABLED` | `true` en Railway |
 | api | `BOOTSTRAP_ADMIN_PHONE`, `BOOTSTRAP_ADMIN_PASSWORD` | crea el primer admin si no hay ninguno |
+| api | `SEED_PASSWORD` | obligatoria si `SEED_DEMO=1` (si falta, bootstrap falla; nunca usa un valor por defecto) |
+| api | `ACCESS_TOKEN_TTL_SECONDS` · `REFRESH_GRACE_SECONDS` | 1800 · 60 |
+| api | `BCV_SOURCE_URL` | por defecto, DolarAPI oficial |
+| api | `VAPID_PUBLIC_KEY` · `VAPID_PRIVATE_KEY` · `VAPID_SUBJECT` | Web Push al admin; vacías = solo log |
 | api | `SEED_DEMO` | `1` = carga datos de demostración (solo staging) |
 | api | `TEST_DATABASE_URL` | solo tests |
 | web | `NEXT_PUBLIC_API_URL` | `https://<api>/api/v1` (se incrusta en build) |
@@ -116,4 +120,8 @@ jmcakes/
 | staging | Neon rama `staging` | Railway, auto desde la rama de integración |
 | production | Neon rama `main` | tras aprobación del dueño |
 
-**Restricciones verificadas (2026-10-06)**: sin salida a Neon:5432 (uso por MCP; migraciones por Railway); `dl.google.com` y descargas de navegadores de Playwright bloqueados (Android y Playwright en GitHub Actions); accesibles npm, PyPI, Maven Central, `maven.google.com`, plugins de Gradle.
+**Restricciones verificadas (2026-10-07):**
+- Sin salida a Neon:5432 (uso por MCP; migraciones por Railway).
+- `dl.google.com` bloqueado, y **`maven.google.com` redirige allí**: AGP y androidx **no se resuelven en el contenedor**. En local solo compilan los módulos Android **JVM puros** (Kotlin, OkHttp, serialization desde Maven Central y el portal de plugins).
+- Descargas de navegadores de Playwright bloqueadas.
+- Accesibles: npm, PyPI, Maven Central y el portal de plugins de Gradle.

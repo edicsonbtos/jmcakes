@@ -53,7 +53,7 @@
 - Prohibido: editar migraciones integradas, `create_all` y `DROP` sin autorización.
 
 ## 5. Contrato y tipos
-- `contracts/openapi.json` **se genera**: `cd api && python scripts/export_openapi.py`.
+- `contracts/openapi.json` **se genera**: `cd api && python -m scripts.export_openapi`.
   - B1, B2 y B3 **no lo commitean**: lo exportan solo para verificar en local.
   - El orquestador lo regenera y lo commitea tras cada integración.
 - `web/src/lib/api-types.ts` lo genera **solo el orquestador** (`npm run gen:api`), en G1 y G2. W1 y W2 no lo regeneran.

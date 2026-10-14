@@ -1,5 +1,7 @@
 # FND — Fundación de la API, base de datos y contrato
 
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **FND-E1**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+
 **Fase 0** (en paralelo con DSN) · rama `block/FND` · BD de pruebas `panaderia_test_fnd` · reutiliza OpenGravity según [06](../06-reutilizacion-opengravity.md), **saneando** lo que se copia.
 
 ## Objetivo
@@ -64,7 +66,7 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
    - **`tests/test_authz_matrix.py`:** lee los roles de `x-roles` de cada operación del OpenAPI y verifica que cada rol no permitido recibe 401/403 en **todas** las operaciones. Nadie más lo edita. Los casos de propiedad (cliente A contra B) van en `tests/bX/test_authz_bX.py` de cada bloque.
    - **`pytest.ini`:** `testpaths = tests`. Una prueba falla si `tests/b1/`, `tests/b2/` o `tests/b3/` existen y recogen 0 pruebas.
    - **Dobles inyectables** (08 §Interfaces): `event_spy`, `push_spy`, `orders_double`, `money_double` y `settings_cache_clear` (autouse).
-   - **`tests/test_contract_inventory.py`:** compara (método, ruta) del OpenAPI con el inventario de 08 (105 operaciones).
+   - **`tests/test_contract_inventory.py`:** compara (método, ruta) del OpenAPI con el inventario de la etapa (51 en E1, ver 09; 110 con todo, ver 08).
    - **Refresh:** dos refresh concurrentes y un reintento dentro de la gracia de 60 s (E15).
    - **Pruebas propias:**
      - auth;
@@ -97,7 +99,7 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
 - Nada de lógica de B1, B2 ni B3 más allá de los stubs indicados.
 
 ## Compuerta G1 (parte FND)
-Todo el §8 en verde, con la salida pegada en el handoff, incluido `test_contract_inventory` (105 operaciones).
+Todo el §8 en verde, con la salida pegada en el handoff, incluido `test_contract_inventory` (51 operaciones en E1; 110 con todo).
 
 
 ## Ajustes v2.3 (auditoría 2b) — prevalecen sobre lo anterior

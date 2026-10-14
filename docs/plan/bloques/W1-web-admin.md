@@ -1,5 +1,7 @@
 # W1 — Web: panel del administrador
 
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **W-E1**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+
 **Fase 1** · rama `block/W1` · `WEB_PORT=3001`, `MOCK_PORT=4011` · diseño `DESIGN.md` + `docs/design/admin.md` · skill **impeccable** · reutiliza las vistas de OpenGravity según [06](../06-reutilizacion-opengravity.md)
 
 ## Objetivo

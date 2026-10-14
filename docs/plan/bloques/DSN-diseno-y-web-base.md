@@ -1,5 +1,7 @@
 # DSN — Sistema de diseño (Impeccable) y base web
 
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **DSN**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+
 **Fase 0** (en paralelo con FND) · rama `block/DSN` · puertos `WEB_PORT=3000`, `MOCK_PORT=4010` · skill obligatoria: **impeccable**
 
 ## Objetivo

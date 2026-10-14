@@ -2,6 +2,8 @@
 
 El detalle de cada hallazgo (problema y corrección) se guarda **fuera de este repositorio público**, porque varios hallazgos describen código del proyecto privado del que se reutilizan piezas. Aquí queda solo la trazabilidad: qué ronda, cuántos hallazgos y su estado.
 
+Total aplicado: **155 hallazgos** (131 hasta v2.3 + 24 de la auditoría 3).
+
 Cada hallazgo lo revisó el orquestador contra el modelo ejecutable (`spec/`) y contra los documentos del plan antes de aplicarlo.
 
 ## Auditoría 1 (2026-10-06)
@@ -162,7 +164,40 @@ Lentes de reutilización, pruebas/infra y producto/UX sobre el plan v2.2.
 | UX-06 | media |
 | UX-07 | media |
 
+## Auditoría 3 (2026-10-13) — plan v2.4 → v2.5
+
+Lentes: 09 como subconjunto de 03 y 08, cobertura de `spec/` para las reglas de E1, carpetas de los 6 agentes de E1, contrato y datos.
+
+**24 hallazgos, todos aplicados.** Severidades: {'critica': 1, 'alta': 9, 'media': 8, 'baja': 6}
+
+| ID | Severidad |
+|---|---|
+| E1-01 | critica |
+| E1-02 | alta |
+| E1-03 | alta |
+| E1-04 | alta |
+| E1-05 | alta |
+| E1-06 | alta |
+| E1-07 | alta |
+| E1-08 | alta |
+| E1-09 | alta |
+| E1-10 | alta |
+| E1-11 | media |
+| E1-12 | media |
+| E1-13 | media |
+| E1-14 | media |
+| E1-15 | media |
+| E1-16 | media |
+| E1-17 | media |
+| E1-18 | media |
+| E1-19 | baja |
+| E1-20 | baja |
+| E1-21 | baja |
+| E1-22 | baja |
+| E1-23 | baja |
+| E1-24 | baja |
+
 ## Resultado
-- **`spec/`:** 34 pruebas en verde y prueba de estrés de 320.000 operaciones aleatorias sin violar invariantes.
-- **Contrato:** inventario de 105 operaciones contadas por script.
+- **`spec/`:** 41 pruebas en verde (v2.5) y pruebas de estrés de 320.000 operaciones aleatorias (v2.2) y de 4.000 secuencias con fiado y saldo anterior (v2.5), sin violar invariantes.
+- **Contrato:** inventario de 110 operaciones (51 en E1), contadas por script.
 - **Temas corregidos:** reglas de dinero; concurrencia; propiedad de archivos entre agentes; contrato y eventos; sesión web con refresh; infraestructura (Railway, Neon, CI, Android); experiencia de usuario (horarios, avisos al dueño, datos móviles, Play Store); seguridad del código reutilizado.

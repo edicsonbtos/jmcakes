@@ -353,13 +353,13 @@ def test_m12_credit_order_shows_paid_when_receivable_paid(shop):
 
 
 def test_m11_every_model_error_code_is_in_catalog():
-    src = pathlib.Path(__file__).with_name("money_model.py").read_text()
+    src = pathlib.Path(__file__).with_name("money_model.py").read_text(encoding="utf-8")
     raised = set()
     for node in ast.walk(ast.parse(src)):
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DomainError":
             raised.add(node.args[0].value)
     assert raised <= ERROR_CODES, raised - ERROR_CODES
-    catalog = pathlib.Path(__file__).parents[1].joinpath("docs/plan/03-flujos-de-negocio.md").read_text()
+    catalog = pathlib.Path(__file__).parents[1].joinpath("docs/plan/03-flujos-de-negocio.md").read_text(encoding="utf-8")
     missing = {c for c in ERROR_CODES if f"`{c}`" not in catalog}
     assert not missing, f"códigos sin documentar en 03 §7: {missing}"
 
@@ -430,11 +430,69 @@ def test_cuaderno_anular_fiado_y_revertir_abono(shop):
     shop.check_invariants()
 
 
+# ---------------- v2.5: auditoría 3 (cuaderno de E1) ----------------
+def test_cuaderno_fiado_con_lineas_redondea_por_linea(shop):
+    c = shop.register()
+    r = shop.fiado(c.id, [("3", "0.333"), ("1", "2.50")])   # 3 × 0.333 = 0.999 → 1.00 por línea
+    assert r.amount == D("3.50") and r.source == "MANUAL"
+    assert [li.line_total for li in r.items] == [D("1.00"), D("2.50")]
+    for lines, code in (([], "EMPTY_ORDER"), ([("0", "1.00")], "INVALID_AMOUNT"), ([("1", "0")], "INVALID_AMOUNT")):
+        with pytest.raises(DomainError) as e:
+            shop.fiado(c.id, lines)
+        assert e.value.code == code
+    shop.check_invariants()
+
+
+def test_cuaderno_fiado_no_exige_credito_ni_bloquea_por_deuda(shop):
+    c = shop.register()                                # CASH, límite 0
+    shop.manual_charge(c.id, "10.00", due_in_days=-30)  # deuda vencida hace un mes
+    shop.fiado(c.id, [("2", "1.50")])                  # el admin siempre puede fiar (03 §3.10b)
+    assert balance(shop, c.id) == D("13.00")
+    shop.check_invariants()
+
+
+def test_cuaderno_revertir_abono_ya_consumido_vuelve_como_deuda(shop):
+    c = shop.register()
+    shop.fiado(c.id, [("1", "20.00")], due_in_days=7)
+    p = shop.report_payment(c.id, "20.00", reference="PM-9")
+    shop.approve(p.id)
+    assert balance(shop, c.id) == D("0.00")
+    shop.reverse(p.id)                                 # no hay saldo a favor: nace una CxC PAYMENT_REVERSAL
+    rev = [r for r in shop.receivables.values() if r.source == "PAYMENT_REVERSAL"]
+    assert len(rev) == 1 and rev[0].amount == D("20.00") and balance(shop, c.id) == D("20.00")
+    later = shop.fiado(c.id, [("1", "5.00")], due_in_days=7)
+    shop.approve(shop.report_payment(c.id, "20.00", reference="PM-10").id)
+    assert rev[0].status.name == "PAID" and later.status.name == "OPEN"   # vence primero, se paga primero
+    shop.check_invariants()
+
+
+def test_cuaderno_anular_fiado_pagado_abona_otro_fiado_antes_de_quedar_a_favor(shop):
+    c = shop.register()
+    a = shop.fiado(c.id, [("1", "10.00")], due_in_days=1)
+    b = shop.fiado(c.id, [("1", "6.00")], due_in_days=5)
+    shop.approve(shop.report_payment(c.id, "10.00", reference="X1").id)
+    assert a.status.name == "PAID" and b.status.name == "OPEN"
+    shop.void_receivable(a.id)                         # lo abonado vuelve y paga primero el otro fiado
+    assert b.status.name == "PAID" and c.wallet == D("4.00") and balance(shop, c.id) == D("-4.00")
+    shop.check_invariants()
+
+
+def test_cuaderno_saldo_anterior_se_anula_igual_que_manual(shop):
+    c = shop.register()
+    r = shop.manual_charge(c.id, "50.00", source="OPENING_BALANCE")
+    shop.approve(shop.report_payment(c.id, "15.00", reference="E1", method="EFECTIVO").id)
+    shop.void_receivable(r.id)
+    assert r.status.name == "VOID" and balance(shop, c.id) == D("-15.00")
+    with pytest.raises(AssertionError):
+        shop.manual_charge(c.id, "1.00", source="ORDER")   # solo MANUAL u OPENING_BALANCE
+    shop.check_invariants()
+
+
 # --- Propiedades: cualquier secuencia de operaciones respeta las invariantes
 OPS = st.lists(st.tuples(
     st.sampled_from(["order", "sched", "pay", "pay_order", "approve", "reject", "cancel", "advance",
                      "reverse", "adjust", "reduce", "charge", "time", "credit", "cash", "block",
-                     "unblock", "payout", "void", "forgive"]),
+                     "unblock", "payout", "void", "forgive", "fiado", "opening"]),
     st.integers(min_value=0, max_value=50),
     st.integers(min_value=1, max_value=9000),
 ), max_size=60)
@@ -497,6 +555,10 @@ def test_property_invariants_hold(ops):
                 shop.adjust(c.id, amount if i % 2 else "-" + amount)
             elif op == "charge":
                 shop.manual_charge(c.id, amount)
+            elif op == "fiado":
+                shop.fiado(c.id, [(str(i % 5 + 1), amount)])
+            elif op == "opening":
+                shop.manual_charge(c.id, amount, source="OPENING_BALANCE")
             elif op == "time":
                 shop.now += cents
                 shop.run_unpaid_auto_cancel()

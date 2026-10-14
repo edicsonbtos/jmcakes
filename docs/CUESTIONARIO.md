@@ -40,16 +40,18 @@
 | C-33 | Bloquear a un cliente | Se cancelan sus pedidos que esperan pago; los pagos en revisión siguen y su dinero queda a favor. |
 | C-34 | Ventana mínima para pagar un pedido | 30 min (también tras un rechazo). |
 | C-35 | Devolver saldo a favor en dinero | Lo hace el admin desde la ficha del cliente; queda como egreso en la cuenta elegida. |
-| C-36 | Perdonar deuda | “Condonar” deja la deuda en lo ya pagado, sin devolver nada. “Anular” solo aplica a cargos manuales y reversos. |
-
+| C-36 | Perdonar deuda | “Condonar” deja la deuda en lo ya pagado, sin devolver nada. “Anular” solo aplica a cargos manuales, saldos anteriores y reversos. |
 | C-38 | Precio de detal | Cada producto tiene precio **mayor** y precio **detal** (opcional; si falta, usa el de mayor). En el fiado se puede editar por línea. |
 | C-39 | Fiado y límite de crédito | El admin siempre puede fiar; si supera el límite, solo se muestra una advertencia. |
-| C-40 | Lista actual de deudores | Se importa por CSV (nombre, teléfono, tipo, deuda, nota) con vista previa. |
+| C-40 | Lista actual de deudores | Se importa por CSV (nombre, teléfono, tipo, deuda, nota) con vista previa. Una deuda negativa es saldo a favor (09 §Carga inicial). |
+| C-42 | Vencimiento del fiado | Vence a los `creditDays` del cliente (por defecto 7); el admin puede poner otra fecha. Las deudas importadas cuentan desde el día de la importación. |
+| C-43 | Referencia del abono | Obligatoria en pago móvil, transferencia y Zelle; no se pide en efectivo. |
 
 ## Decisión pendiente del dueño (importante)
 
 | # | Pregunta | Recomendación |
 |---|---|---|
+| C-41 | **Antes de E2:** un cliente de contado con un fiado abierto no puede pedir (`OPEN_DEBT`). ¿Qué hacemos con los clientes del cuaderno? (09 §Decisión pendiente para E2) | **Pasar a crédito, con límite, a los que fían.** No bloquea E1. |
 | C-37 | El repo `jmcakes` es **público** y va a contener código adaptado de OpenGravity, que es **privado** (lógica de pagos y seguridad). ¿Lo hacemos privado? | **Hacerlo privado.** Play Store no exige que sea público. Mientras tanto, los agentes sanean todo lo que copian y CI corre `gitleaks`. |
 
 ## Requiere al dueño (no lo puede hacer un agente)

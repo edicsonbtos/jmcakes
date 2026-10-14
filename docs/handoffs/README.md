@@ -1,3 +1,3 @@
 # Notas de entrega
 
-Cada bloque deja aquí `<ID>.md` usando la plantilla de `docs/plan/05-protocolo-agentes.md` §6.
+Cada bloque deja aquí `<ID>.md` usando la plantilla de `docs/plan/05-protocolo-agentes.md` §7.

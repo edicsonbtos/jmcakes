@@ -1,4 +1,4 @@
-# 03 — Flujos de negocio (v2.1, tras la auditoría 1)
+# 03 — Flujos de negocio (v2.5)
 
 Reglas exactas para B2 (pedidos) y B3 (dinero).
 - Cada flujo con dinero corre en **una sola transacción**: cliente bloqueado (`SELECT … FOR UPDATE` sobre `customers`) y escritura **solo** a través de `services/ledger.py`.
@@ -44,7 +44,6 @@ Validaciones al crear o cotizar, todas del servidor (`MoneyService.assert_can_or
 - **Líneas:** producto publicado y disponible, `qty ≥ minQty`, precio del servidor. Errores `PRODUCT_UNAVAILABLE` y `BELOW_MIN_QTY` (con el producto en `meta`). Sin líneas: `EMPTY_ORDER`.
 - **Tipo de entrega:**
   - `fulfillmentType = ASAP` → `dueAt = ahora`; se recalcula a la hora de confirmación. **Solo se acepta ASAP si la hora de Caracas está entre `openingTime` y `closingTime − minLeadMinutes`.** Si no: `422 INVALID_SCHEDULE` “Ya no podemos entregar hoy. Programa tu pedido para mañana.”
-  - Si un ASAP se **confirma** (pago aprobado) después de `closingTime − minLeadMinutes`, su `dueAt` pasa al siguiente `openingTime`, sin marca de “Atrasado”, y el push dice “Tu pedido #N se prepara mañana a primera hora”. **Solo se acepta ASAP si la hora de Caracas está entre `openingTime` y `closingTime − minLeadMinutes`.** Si no: `422 INVALID_SCHEDULE` “Ya no podemos entregar hoy. Programa tu pedido para mañana.”
   - Si un ASAP se **confirma** (pago aprobado) después de `closingTime − minLeadMinutes`, su `dueAt` pasa al siguiente `openingTime`, sin marca de “Atrasado”, y el push dice “Tu pedido #N se prepara mañana a primera hora”.
   - `SCHEDULED` → el cliente envía `dueAt` (fecha+hora de Caracas). Debe cumplir `≥ ahora + orders.minLeadMinutes`, `≤ hoy + orders.maxDaysAhead` y hora entre `openingTime` y `closingTime`. Si no: `422 INVALID_SCHEDULE` con el motivo legible.
 - `total = Σ líneas + delivery.feeUsd`.
@@ -193,8 +192,29 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 | `unpaid_auto_cancel` | cada 10 min | Toma `orders` AWAITING_PAYMENT con `expiresAt < ahora` usando **`FOR UPDATE SKIP LOCKED`**. Cancela los que no tengan pagos PENDING_REVIEW o IN_REVIEW (§3.8, actor sistema). Idempotente. |
 | `daily_closing` | **00:05**, para el **día anterior** | Métricas del día de Caracas (por `approvedAt` y `confirmedAt` en SQL) + PDF. Upsert por fecha. Se reprocesa con `POST /admin/closures/{date}/run`. |
 
-### 3.10b Fiado de mostrador (admin, E1)
-El admin fía productos (líneas con precio de catálogo según el tipo de cliente: detal → `retailPrice`, mayorista → `price`; editable por línea) o un cargo libre. Se crea una CxC `MANUAL` con `receivable_items` y luego corre `settle`. **No** aplican `OPEN_DEBT` ni el límite de crédito: si el fiado supera `creditLimit`, el panel muestra una advertencia sin bloquear. El saldo anterior al migrar es una CxC `OPENING_BALANCE`. Saldo mostrado = deuda abierta − saldo a favor.
+### 3.10b Fiado de mostrador y cuaderno (admin, E1)
+Modelo: `Shop.fiado` y `Shop.manual_charge(source=…)` en `spec/money_model.py`.
+- **Fiado:** líneas de catálogo o un cargo libre (“Otro”, sin `productId`).
+  - Precio por defecto: si el cliente es RETAIL, `retailPrice ?? price`; si es WHOLESALE, `price`. El admin puede editarlo por línea.
+  - Se lee el producto aunque no esté publicado ni disponible, y **no** se aplica `minQty`.
+  - `qty > 0` (hasta 3 decimales, para productos por kg) y `unitPrice > 0`; si no, `INVALID_AMOUNT`. Sin líneas: `EMPTY_ORDER`.
+  - `lineTotal = round(qty × unitPrice, 2)` con `ROUND_HALF_UP` **por línea**, y `amount = Σ lineTotal`.
+  - Se crea una CxC `MANUAL` con sus `receivable_items` y luego corre `settle`.
+- **Vencimiento:** `dueAt` = fin del día de Caracas de `dueDate`, si se envía; si no, de `hoy + customers.creditDays`. Es la misma fórmula de §3.1.
+- **Sin bloqueos:** **no** aplican `CUSTOMER_BLOCKED`, `OVERDUE_DEBT`, `OPEN_DEBT` ni el límite de crédito.
+  - Si `creditLimit > 0` y la deuda abierta después del fiado supera `creditLimit`, la respuesta trae `warning = CREDIT_LIMIT_EXCEEDED`, con `meta{limit, openDebt}`. El panel la muestra sin bloquear.
+  - Con `creditLimit = 0` (el valor por defecto) no hay advertencia.
+- **Saldo anterior** (al crear el cliente o al importar):
+  - **Deuda > 0:** CxC `OPENING_BALANCE`, con `dueAt` igual que un fiado sin `dueDate`. Se comporta como `MANUAL` en todo.
+  - **Saldo a favor (< 0):** `ADJUSTMENT(+monto)` con la nota “Saldo a favor anterior”. No toca las cuentas del negocio.
+- **Abono:** es un pago `purpose = MANUAL` que nace APPROVED (§3.4 sin revisión, con la misma corrección opcional de `bcvRateUsed`). Luego corre `settle`.
+  - La `reference` es obligatoria salvo en métodos de efectivo.
+  - En efectivo, el dinero entra a la `bank_account` “Caja” del método, ligada a su cuenta del negocio.
+- **Orden en que se paga:** el de `settle` (§3.5), es decir, CxC por `dueAt ASC` y luego `issuedAt ASC`. Primero se paga la que **vence primero**.
+- **Anular un fiado o un saldo anterior (§3.11):** lo ya abonado vuelve a la billetera y `settle` lo **reaplica** a las demás deudas abiertas. Solo el sobrante queda a favor.
+- **Revertir un abono (§3.7):** si el saldo a favor no alcanza, la diferencia nace como CxC `PAYMENT_REVERSAL` con `dueAt = ahora`, y por eso aparece vencida.
+- **Saldo mostrado** = `openDebt − walletBalance` (positivo = debe). **Deuda vencida** (`overdueDebt`) = Σ(`amount − paidAmount`) de las CxC OPEN o PARTIAL con `dueAt < ahora`.
+  - `credit.blockOverdueDays` solo se usa para bloquear pedidos (§2), no para mostrar.
 
 ### 3.11 Anular o condonar una CxC (admin)
 - **Anular:** solo las CxC de source **MANUAL**, **OPENING_BALANCE** o **PAYMENT_REVERSAL**. Las de un pedido se anulan cancelando el pedido (§3.8); si no, `409 RECEIVABLE_NOT_VOIDABLE`. Lo pagado vuelve con `RECEIVABLE_REFUND`; luego `VOID` (VOIDED) y `settle`.
@@ -280,6 +300,8 @@ El admin fía productos (líneas con precio de catálogo según el tipo de clien
 | `FILE_INVALID` | 422 | El archivo debe ser una imagen o PDF de hasta 5 MB. |
 | `PAYMENT_ACCOUNT_MISMATCH` | 422 | La cuenta elegida no corresponde a ese método o moneda. |
 | `PRICE_PREVIEW_EXPIRED` | 409 | La vista previa venció o los precios cambiaron. Genera una nueva. |
+| `IMPORT_PREVIEW_EXPIRED` | 409 | La vista previa de la importación venció. Sube el archivo otra vez. |
+| `INVALID_CURRENT_PASSWORD` | 422 | La contraseña actual no es correcta. |
 | `PHONE_TAKEN` | 409 | Ese teléfono ya está registrado. Inicia sesión o escríbenos si olvidaste tu contraseña. |
 | `RATE_LIMITED` | 429 | Demasiados intentos. Espera un minuto. |
 | `UNAUTHENTICATED` | 401 | Tu sesión expiró. Inicia sesión de nuevo. |

@@ -1,15 +1,18 @@
-# 07 — Estrategia de pruebas y compuertas (v2.1)
+# 07 — Estrategia de pruebas y compuertas (v2.5)
+
+> **Durante E1** las compuertas, el inventario (51 operaciones) y los escenarios de aceptación (**CU-1…CU-12**) son los de [09](09-etapas-admin-primero.md). Los escenarios `E1`…`E17` de §2 son de pedidos y pagos del cliente, y aplican desde E2. No confundirlos con las etapas E1–E4.
 
 ## 1. El plan está probado: `spec/`
 - `spec/money_model.py` es la referencia ejecutable de 03 §1–§3. Incluye:
   - pedidos ASAP y programados, CASH y CREDIT, uso de la billetera;
   - reportar, aprobar, rechazar y revertir pagos; `settle`;
   - cancelar y reducir; bloquear; condonar y anular CxC; devoluciones y ajustes;
+  - el cuaderno de E1: fiado por líneas, saldo anterior (`OPENING_BALANCE`), abonos, anular y revertir;
   - vencimientos con ventana mínima de pago;
   - catálogo `ERROR_CODES`.
-- `spec/test_money_model.py` tiene **32 escenarios** más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
+- `spec/test_money_model.py` tiene **39 escenarios** (7 del cuaderno de E1) más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
 - Resultados al cerrar la auditoría 1:
-  - `34 passed` (v2.2, tras la auditoría 2).
+  - `34 passed` (v2.2, tras la auditoría 2); `41 passed` (v2.5, tras la auditoría 3), más una corrida de 4.000 secuencias que incluye `fiado` y `opening`.
   - Corrida extendida de **4.000 secuencias × 80 operaciones (320.000 operaciones)** sin violaciones, con todas las ramas ejercitadas: OPEN_DEBT, OVERDUE_DEBT, bloqueos, condonación, anulación, reducción a 0 y referencias duplicadas.
 - Instalar y correr: `pip install -r spec/requirements.txt && python -m pytest spec -q`.
 - **Si la API y el modelo discrepan, manda el modelo**, salvo que se pruebe un error en él. En ese caso se corrigen el modelo y 03 en el mismo commit.
@@ -55,7 +58,7 @@
 | Gate | Responsable | Condición |
 |---|---|---|
 | **G0** fin del plan | orquestador | `spec` verde · 2 auditorías aplicadas · CLAUDE.md coherente con v2. |
-| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las **105 operaciones** del inventario de 08; cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
+| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las operaciones del inventario de 08 que correspondan a la etapa (**51 en E1**; **110** con todo); cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
 | **G2** fin de Fase 1 (6 agentes) | orquestador | Cada rama con sus pruebas verdes y su handoff · `git diff --stat` dentro de sus carpetas · tras integrar: suite completa verde, `alembic heads` = 1, contrato y `api-types.ts` regenerados · **CI verde en `api.yml`, `contract.yml`, `secrets.yml` y `web.yml` (lint/test/build)**. `e2e-web` y `android.yml` pueden quedar en rojo: sus fallas se registran en STATUS.md y pasan a G3 (Q1 la web, Q2 Android). |
 | **G3** fin de Fase 2 | orquestador + Q1/Q2 | E2E E1–E14 verdes en CI · staging: `/api/health` OK, `get_database_tables` con las tablas de 02, `alembic_version` = head, login de admin en staging verificado por `curl` (API y página de login) y por el job `staging-smoke` · `android.yml` verde con pruebas > 0 · auditor contable y `/security-review` sin hallazgos altos · `impeccable detect`/`audit` sin críticos. |
 

@@ -130,6 +130,14 @@ class Receivable:
     forgiven: Decimal = ZERO
     status: RS = RS.OPEN
     void_reason: str | None = None
+    items: list = field(default_factory=list)   # receivable_items (fiado, 03 §3.10b)
+
+
+@dataclass
+class ReceivableItem:
+    qty: Decimal
+    unit_price: Decimal
+    line_total: Decimal
 
 
 @dataclass
@@ -459,17 +467,31 @@ class Shop:
             raise DomainError("PAYOUT_EXCEEDS_BALANCE")
         self._move(c, "WALLET_PAYOUT", -a)
 
-    def manual_charge(self, cid: int, amount: str, due_in_days: int = 7) -> Receivable:
+    def manual_charge(self, cid: int, amount: str, due_in_days: int = 7, source: str = "MANUAL",
+                      items: list | None = None) -> Receivable:
+        """§3.10b/§3.11: cargo del admin. Sin OPEN_DEBT ni límite de crédito: el admin decide."""
+        assert source in ("MANUAL", "OPENING_BALANCE")
         if q(amount) <= ZERO:
             raise DomainError("INVALID_AMOUNT")
         r = Receivable(id=next(self._ids), customer_id=cid, amount=q(amount), issued_at=self.now,
-                       due_at=self.now + due_in_days * DAY, source="MANUAL")
+                       due_at=self.now + due_in_days * DAY, source=source, items=items or [])
         self.receivables[r.id] = r
         self.settle(cid)
         return r
 
+    def fiado(self, cid: int, lines: list[tuple[str, str]], due_in_days: int = 7) -> Receivable:
+        """§3.10b: fiado por líneas (qty, unitPrice). lineTotal = round(qty × unitPrice, 2) por línea."""
+        if not lines:
+            raise DomainError("EMPTY_ORDER")
+        items = []
+        for qty, price in lines:
+            if Decimal(qty) <= ZERO or Decimal(price) <= ZERO:
+                raise DomainError("INVALID_AMOUNT")
+            items.append(ReceivableItem(Decimal(qty), Decimal(price), q(Decimal(qty) * Decimal(price))))
+        return self.manual_charge(cid, str(sum(i.line_total for i in items)), due_in_days, items=items)
+
     def void_receivable(self, rid: int) -> None:
-        """§3.11: solo MANUAL/PAYMENT_REVERSAL; devuelve lo pagado a la billetera."""
+        """§3.11: solo MANUAL/OPENING_BALANCE/PAYMENT_REVERSAL; lo pagado vuelve a la billetera y settle lo reaplica."""
         r = self.receivables[rid]
         if r.source == "ORDER" or r.status == RS.VOID:
             raise DomainError("RECEIVABLE_NOT_VOIDABLE")

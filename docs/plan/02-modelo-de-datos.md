@@ -1,4 +1,4 @@
-# 02 — Modelo de datos (v2.3, convenciones OpenGravity)
+# 02 — Modelo de datos (v2.5, convenciones OpenGravity)
 
 FND implementa **todo** este modelo en la migración Alembic inicial. Los bloques siguientes no crean tablas; si una es indispensable, siguen el protocolo §4.
 
@@ -16,7 +16,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 |---|---|
 | `users` | `role` (`UserRole`: ADMIN, PRODUCTION, DELIVERY, CUSTOMER), `phone` (`uq_users_phone` → `PHONE_TAKEN`, E.164), `email` (null), `passwordHash` (bcrypt), `fullName`, `isActive`, `mustChangePassword`, `lastLoginAt` |
 | `refresh_tokens` | `userId`, `tokenHash` (único), `expiresAt`, `revokedAt`, `rotatedAt`, `replacedById`, `deviceLabel` (gracia de rotación de 60 s, 08) |
-| `idempotency_records` | `scope` (p. ej. `admin.payout`), `key`, `requestHash`, `responseJson`, `createdAt`; único `(scope, key)`. Para operaciones de admin sin tabla propia con llave (cargos, ajustes, devoluciones). |
+| `idempotency_records` | `scope` (p. ej. `admin.payout`), `key`, `requestHash`, `responseJson`, `createdAt`; único `(scope, key)`. Para operaciones de admin sin tabla propia con llave (cargos, fiados, abonos, ajustes, devoluciones). También guarda la vista previa de la importación de clientes (scope `admin.customer_import`, `key` = `previewToken`, filas validadas en `responseJson`, vence a los 30 min de `createdAt`). |
 | `device_tokens` | `userId`, `app` (`cliente`/`delivery`/`admin-web`), `fcmToken` (único, null), `webPushSubscription` (JSON, null), `lastSeenAt` |
 
 ## Clientes — `customers`
@@ -38,7 +38,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 |---|---|
 | `categories` | `name`, `sortOrder`, `isActive` |
 | `products` | `categoryId`, `name`, `description`, `unitLabel`, `price` (> 0, precio **mayor**), `retailPrice` (null = usa `price`; precio **detal**), `minQty` (≥ 1), `imageFileId`, `isPublished`, `isAvailable`, `sortOrder` |
-| `price_history` | `productId`, `oldPrice`, `newPrice`, `changedBy`, `batchId`, `createdAt` |
+| `price_history` | `productId`, `priceType` (`PriceType` WHOLESALE / RETAIL), `oldPrice` (null si no había precio detal), `newPrice` (null si se quita el precio detal), `changedBy`, `batchId`, `createdAt` |
 
 ## Pedidos
 **`orders`**
@@ -134,7 +134,7 @@ Otras columnas:
 | `voidReason` | ORDER_CANCELLED, REDUCED, VOIDED, FORGIVEN. |
 | `voidedBy`, `voidedAt`, `note` | |
 
-**`receivable_items`**: líneas de un fiado. Columnas: `receivableId`, `productId` (null = cargo libre “Otro”), `productName`, `unitLabel`, `qty`, `unitPrice`, `lineTotal`. La suma de `lineTotal` es igual a `receivables.amount` al crearla.
+**`receivable_items`**: líneas de un fiado. Columnas: `receivableId`, `productId` (null = cargo libre “Otro”), `productName`, `unitLabel`, `qty` (`Numeric(10,3)`, > 0), `unitPrice` (> 0), `lineTotal` (= `round(qty × unitPrice, 2)`). La suma de `lineTotal` es igual a `receivables.amount` al crearla (03 §3.10b). **Solo inserción**: anular un fiado no toca sus líneas.
 
 ## Cuentas del negocio (las `wallets` de OpenGravity, renombradas)
 | Tabla | Columnas clave |

@@ -1,4 +1,4 @@
-# 08 — Contrato v1: endpoints, eventos, push e interfaces internas (v2.2)
+# 08 — Contrato v1: endpoints, eventos, push e interfaces internas (v2.5)
 
 FND declara **todas** estas operaciones, cada una en el archivo de router indicado, con:
 - esquemas Pydantic (`ApiModel`, camelCase);
@@ -25,7 +25,8 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `POST /auth/login` | P | `{phone, password}`. Límite por IP y teléfono → `429 RATE_LIMITED`. |
 | `POST /auth/refresh` | P | `{refreshToken}` → par nuevo. **Gracia de 60 s**: un token rotado hace menos de `REFRESH_GRACE_SECONDS` todavía emite un par nuevo, lo que cubre la concurrencia y las respuestas perdidas. Pasado ese margen, `401 UNAUTHENTICATED`. |
 | `POST /auth/logout` | C A K D | |
-| `GET /auth/me` | C A K D | `{user, customer?}` |
+| `GET /auth/me` | C A K D | `{user, customer?}`; `user.mustChangePassword`. |
+| `POST /auth/change-password` | C A K D | `{currentPassword, newPassword}` (mín. 8). Si la actual no coincide → `422 INVALID_CURRENT_PASSWORD`. Pone `mustChangePassword = false`, revoca los demás refresh y devuelve un par nuevo. **(v2.5)** |
 | `POST /auth/device-tokens` · `DELETE /auth/device-tokens/{token}` | C D A | `{app: cliente\|delivery\|admin-web, fcmToken?, webPushSubscription?}` (admin-web = Web Push VAPID) |
 | `DELETE /auth/account` | C | Anonimiza y desactiva; conserva la contabilidad. |
 
@@ -35,14 +36,14 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `GET /catalog` | `catalog.py` | C A | `{rate, categories[{id, name, products[{id, name, description, unitLabel, price, priceVes, minQty, isAvailable, imageUrl}]}]}` |
 | `GET /admin/categories` · `POST /admin/categories` · `PATCH /admin/categories/{id}` | `catalog.py` | A | |
 | `GET /admin/products` · `POST /admin/products` · `GET /admin/products/{id}` · `PATCH /admin/products/{id}` | `catalog.py` | A | Con `imageUrl`. |
-| `POST /admin/products/bulk-price/preview` · `POST /admin/products/bulk-price/apply` | `catalog.py` | A | `{productIds?, categoryId?, mode: PERCENT\|AMOUNT, value, roundTo?}` → `{rows[{productId, name, oldPrice, newPrice}], previewToken}` · `apply {previewToken}`. Si el token venció o cambió el estado → `409 PRICE_PREVIEW_EXPIRED`. |
+| `POST /admin/products/bulk-price/preview` · `POST /admin/products/bulk-price/apply` | `catalog.py` | A | `{productIds?, categoryId?, target?: WHOLESALE\|RETAIL (por defecto WHOLESALE), mode: PERCENT\|AMOUNT, value, roundTo?}` → `{rows[{productId, name, oldPrice, newPrice}], previewToken}`. Con `RETAIL`, los productos sin `retailPrice` parten de `price` · `apply {previewToken}`. Si el token venció o cambió el estado → `409 PRICE_PREVIEW_EXPIRED`. |
 | `GET /admin/products/{id}/price-history` | `catalog.py` | A | |
 | `POST /files` | `files.py` | C A | Multipart `{file, purpose}` → `{id, purpose, contentType, sizeBytes}`. Si no es válido → `422 FILE_INVALID`. PRODUCT_IMAGE solo A. |
 | `GET /files/{id}/url` | `files.py` | C A | `{url, expiresAt}`. PAYMENT_PROOF: su dueño y A. |
 | `GET /files/{id}/public` | `files.py` | P | Solo PRODUCT_IMAGE, ya convertida a WebP (máx. 800 px) y miniatura (`?size=thumb`, 320 px). URL estable `?v=<hash>` con `Cache-Control: public, max-age=31536000, immutable`. `imageUrl` del catálogo apunta aquí. |
 | `GET /files/{id}/local` | `files.py` | P (firmada) | `?exp=&sig=` con `sig = HMAC(JWT_SECRET, id\|exp)` y TTL de 1 h; firma inválida o vencida → 403. Solo con `STORAGE_BACKEND=local`. Así `<img>` y Coil cargan sin Bearer. |
 | `GET /me/profile` · `PATCH /me/profile` | `profile.py` | C | |
-| `GET /admin/customers` · `POST /admin/customers` · `GET /admin/customers/{id}` · `PATCH /admin/customers/{id}` | `customers.py` | A | Filtros: `query`, `type`, `paymentMode`, `hasDebt`, `blocked`. Columnas `walletBalance`, `openDebt`, `overdueDebt` (de `FinanceQueries`). |
+| `GET /admin/customers` · `POST /admin/customers` · `GET /admin/customers/{id}` · `PATCH /admin/customers/{id}` | `customers.py` | A | Filtros: `query` (nombre, negocio, teléfono o cédula/RIF), `type`, `paymentMode`, `hasDebt`, `overdue`, `blocked`; `sort=debt_desc\|name`. Columnas `walletBalance`, `openDebt`, `overdueDebt`, *`balance`*, *`balanceVes`* (de `FinanceQueries`). `POST` acepta `openingBalance?` (string decimal; > 0 = deuda, < 0 = a favor) y `openingNote?` (03 §3.10b). |
 | `POST /admin/customers/{id}/credit` | `customers.py` | A | `{paymentMode, creditLimit, creditDays}` |
 | `POST /admin/customers/{id}/block` · `POST /admin/customers/{id}/unblock` | `customers.py` | A | `block {reason}` |
 | `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/{id}` · `POST /admin/users/{id}/reset-password` | `users.py` | A | `reset-password` también para CUSTOMER: contraseña temporal, revoca refresh, `mustChangePassword = true`. |
@@ -94,9 +95,9 @@ Lo no implementado responde `501 NOT_IMPLEMENTED`. El **inventario** del final e
 | `GET /admin/payments/pending-count` | `payments.py` | A | `{count, totalUsd}` |
 | `POST /admin/payments/{id}/take` · `.../approve` · `.../reject` · `.../reverse` | `payments.py` | A | `approve {amountLocal?, bcvRateUsed?, note?}` (03 §3.4) · `reject {reason}` · `reverse {reason}` |
 | `GET /me/wallet` · `GET /me/wallet/movements` | `wallet.py` | C | `{walletBalance, *walletBalanceVes*, openDebt, *openDebtVes*, overdueDebt, *overdueDebtVes*, rate, paymentMode, creditLimit, creditAvailable, receivables[]}`. Movimientos ordenados por `seq`. |
-| `POST /admin/customers/{id}/manual-payment` | `admin_money.py` | A | `Idempotency-Key`. `{orderId?, paymentMethodId, bankAccountId, localCurrency, amountLocal, paidOn, reference?, note?}` |
+| `POST /admin/customers/{id}/manual-payment` | `admin_money.py` | A | `Idempotency-Key`. `{orderId?, paymentMethodId, bankAccountId, localCurrency, amountLocal, paidOn, bcvRateUsed?, reference?, note?}`. `reference` obligatoria salvo en métodos de efectivo (03 §3.10b). Respuesta: pago + *`balance`*. |
 | `POST /admin/customers/{id}/charges` · `.../adjustments` · `.../payouts` | `admin_money.py` | A | **`Idempotency-Key`**. `charges {amount, description, dueDate}` · `adjustments {amount, note}` · `payouts {amount, cashAccountId, note}` |
-| `GET /admin/customers/{id}/statement` | `admin_money.py` | A | `?from&to&format=json\|csv` |
+| `GET /admin/customers/{id}/statement` | `admin_money.py` | A | `?from&to&format=json\|csv\|whatsapp`. JSON: `{customer, openingBalance, rows[{seq, at, kind: FIADO\|ABONO\|ANULACION\|REVERSO\|AJUSTE\|…, description, amount, balanceAfter, actorName, receivableId?, paymentId?, items[]?}], closingBalance}`. `whatsapp`: texto plano con el saldo y los últimos movimientos. |
 | `GET /admin/receivables` · `GET /admin/receivables/aging` · `POST /admin/receivables/{id}/void` · `POST /admin/receivables/{id}/forgive` | `admin_money.py` | A | `{reason}` |
 | `GET /admin/cash-accounts` · `POST /admin/cash-accounts` · `GET /admin/cash-accounts/{id}/transactions` | `cash_accounts.py` | A | |
 | `GET /admin/dashboard/summary` · `GET /admin/dashboard/top-products` | `dashboard.py` | A | `summary?date=` incluye `readyUnassignedCount` (03 §6). |
@@ -219,14 +220,26 @@ GET|POST /api/v1/admin/cash-accounts · GET /api/v1/admin/cash-accounts/{id}/tra
 GET /api/v1/admin/dashboard/summary · GET /api/v1/admin/dashboard/top-products
 GET /api/v1/admin/closures · GET /api/v1/admin/closures/{date} · GET /api/v1/admin/closures/{date}/pdf · POST /api/v1/admin/closures/{date}/run
 GET /api/v1/admin/export/{kind}
+POST /api/v1/auth/change-password
+POST /api/v1/admin/customers/{id}/fiado · POST /api/v1/admin/customers/{id}/fiado/quote
+POST /api/v1/admin/customers/import/preview · POST /api/v1/admin/customers/import/apply
 ```
-`a|b` sobre la misma ruta base significa una operación por variante. Total: **105 operaciones**. FND las cuenta con `export_openapi.py --count`.
+`a|b` sobre la misma ruta base significa una operación por variante. Total: **110 operaciones** (105 de v2.3 + 5 de v2.4/v2.5). FND las cuenta con `export_openapi.py --count`. El inventario **de E1** (51 operaciones) está en [09](09-etapas-admin-primero.md) §E1 — API.
 
-## Agregados v2.4 (Etapa 1: cuaderno de clientes)
+## Agregados v2.4–v2.5 (Etapa 1: cuaderno de clientes)
 | Ruta | Archivo | Rol | Notas |
 |---|---|---|---|
-| `POST /admin/customers/{id}/fiado` | `admin_money.py` | A | `Idempotency-Key`. `{items[{productId?, name?, qty, unitPrice?}], note?, dueDate?}` → CxC MANUAL con líneas (03 §3.10b). Respuesta: CxC + `balance` + `warning?` (límite superado). |
-| `POST /admin/customers/import/preview` | `customers.py` | A | Multipart CSV (`nombre, telefono, tipo, deuda, nota`) → `{rows[{line, data, errors[]}], previewToken}`. |
-| `POST /admin/customers/import/apply` | `customers.py` | A | `{previewToken}` → crea los clientes y sus CxC `OPENING_BALANCE`; idempotente por token. |
+| `POST /admin/customers/{id}/fiado/quote` | `admin_money.py` | A | Mismo cuerpo que `fiado`, **sin escribir** → `{items[{productId?, productName, unitLabel, qty, unitPrice, lineTotal}], total, totalVes, balanceBefore, balanceAfter, warning?}`. La web lo llama en vivo (con *debounce*) para mostrar el total: la web no calcula dinero. |
+| `POST /admin/customers/{id}/fiado` | `admin_money.py` | A | `Idempotency-Key` (scope `admin.fiado` en `idempotency_records`). `{items[{productId?, name?, qty, unitPrice?}], note?, dueDate?}`. Sin `productId`, `name` y `unitPrice` son obligatorios (cargo libre “Otro”). Crea una CxC MANUAL con sus líneas (03 §3.10b). Respuesta: `{receivable, items[], balance, balanceVes, warning?}`. |
+| `POST /admin/customers/import/preview` | `customers.py` | A | Multipart CSV, ver 09 §Carga inicial → `{rows[{line, data, errors[]}], validCount, errorCount, totalDebt, previewToken}`. Las filas validadas quedan en `idempotency_records` (scope `admin.customer_import`, TTL 30 min). |
+| `POST /admin/customers/import/apply` | `customers.py` | A | `{previewToken}`: crea en **una transacción** los clientes válidos, sus CxC `OPENING_BALANCE` o sus ajustes a favor (vía `MoneyService.open_balance`) → `{created, skipped[{line, reason}]}`. Repetir el token devuelve el mismo resultado; si venció → `409 IMPORT_PREVIEW_EXPIRED`. |
+| `POST /auth/change-password` | `auth.py` | C A K D | Ver §FND. |
 
-`AdminCustomer` agrega los campos derivados `balance` y `balanceVes` (positivo = debe). `statement` acepta `format=whatsapp` (texto plano). Productos: `retailPrice`.
+Campos agregados:
+- `AdminCustomer` suma los campos derivados `balance` y `balanceVes` (positivo = debe).
+- `statement` acepta `format=whatsapp`.
+- Productos: `retailPrice` (`string | null`) en `GET/POST/PATCH /admin/products` y *`retailPriceVes`*.
+
+Interfaces nuevas (congeladas por FND, ver §Interfaces):
+- `MoneyService.open_balance(session, customer_id, amount, note, actor_id)`: CxC `OPENING_BALANCE` si `amount > 0`, `ADJUSTMENT(+)` si `amount < 0`, luego `settle`. Implementa B3 (B-E1b) y consume B1 (B-E1a). El stub de FND lo registra en `money_double`.
+- `FinanceQueries.debt_subquery()`: un *selectable* SQLAlchemy `(customerId, openDebt, overdueDebt, walletBalance, balance)` que B1 une a su listado para filtrar y ordenar por deuda con cursor. Implementa B3 y consume B1. El stub de FND devuelve ceros.

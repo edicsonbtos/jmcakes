@@ -19,6 +19,8 @@
 | Q1 | `panaderia_test_q1`, `panaderia_e2e` | API 8020, web 3020 |
 | Q2 | — | — |
 
+   **E1** (09 §E1 — Agentes): FND-E1 usa lo de FND, B-E1a lo de B1, B-E1b lo de B3, W-E1 lo de W1 y Q-E1 lo de Q1. La rama es `block/<ID de E1>`.
+
    - Conexión: `TEST_DATABASE_URL=postgresql+psycopg://dev:dev@127.0.0.1:5432/<base>`. El conftest crea la base si no existe.
    - Postgres: `service postgresql start`. Si falta el rol `dev`, crearlo con `su postgres -c "psql -c \"CREATE ROLE dev LOGIN SUPERUSER PASSWORD 'dev'\""`. `scripts/dev-setup.sh` (FND) hace todo esto.
 

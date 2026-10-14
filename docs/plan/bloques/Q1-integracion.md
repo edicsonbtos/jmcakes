@@ -1,5 +1,7 @@
 # Q1 — Integración backend + web, E2E, runbook de staging y auditorías
 
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **Q-E1**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+
 **Fase 2** · **worktree aislado `block/Q1`** creado desde el estado integrado en G2 (como todos los agentes); escribe en `e2e/**` y en correcciones de `api/**` y `web/**`. Aplica además la lista de correcciones de UI web que entregue Q2 · BD `panaderia_test_q1` y `panaderia_e2e` · puertos API 8020 y web 3020
 
 ## Objetivo

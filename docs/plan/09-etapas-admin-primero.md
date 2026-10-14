@@ -186,6 +186,8 @@ Notas de E1 sobre operaciones existentes:
 
 `/cambiar-contrasena` vive en `web/src/app/(admin)/cambiar-contrasena/` (carpeta de W-E1). `proxy.ts` (DSN) redirige ahí cuando `/auth/me` trae `mustChangePassword = true`.
 
+**Prototipo de referencia:** [`docs/prototipos/cuaderno-e1.html`](../prototipos/cuaderno-e1.html). Es un prototipo funcional que se abre en el navegador, con datos de ejemplo y las reglas de 03 §3.10b. Muestra el **flujo** y los **textos**, no la dirección visual, que se elige en G0.5. DSN y W-E1 lo usan como guía de interacción.
+
 **Requisitos de uso:**
 - **Teléfono primero:** el dueño registra un abono en menos de 15 segundos desde el celular. La ficha muestra el saldo arriba y los dos botones al alcance del pulgar.
 - **Fiar rápido:** buscador de productos con − / + y el total en vivo de `fiado/quote` (con *debounce* de 300 ms). El `Idempotency-Key` se genera **una vez por intento** de guardar.

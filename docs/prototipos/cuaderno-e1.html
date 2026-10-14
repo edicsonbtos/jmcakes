@@ -1,0 +1,507 @@
+<title>Cuaderno de la Panadería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: panel operativo, teléfono primero; en pantallas anchas, lista y ficha lado a lado. */
+:root{
+  --bg:#f6f5f2; --surface:#ffffff; --ink:#2a211b; --muted:#6f655d; --line:#e4dfd8;
+  --crust:#b4621a; --crust-ink:#ffffff; --debt:#b3261e; --debt-bg:#fbe9e7; --favor:#1f6f4a; --favor-bg:#e5f3ea; --warn:#8a5a00; --warn-bg:#fff3d6;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#171310; --surface:#221c18; --ink:#f1ebe4; --muted:#b0a59b; --line:#3a312a;
+  --crust:#e08a3c; --crust-ink:#1b120a; --debt:#ff8a80; --debt-bg:#3a1b18; --favor:#7fd3a5; --favor-bg:#16302a; --warn:#ffcf6b; --warn-bg:#3a2e12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171310; --surface:#221c18; --ink:#f1ebe4; --muted:#b0a59b; --line:#3a312a;
+  --crust:#e08a3c; --crust-ink:#1b120a; --debt:#ff8a80; --debt-bg:#3a1b18; --favor:#7fd3a5; --favor-bg:#16302a; --warn:#ffcf6b; --warn-bg:#3a2e12; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--crust);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.app{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:0 96px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--display);font-weight:800;font-size:1.25rem;letter-spacing:-.01em}
+.brand small{display:block;font-family:var(--body);font-weight:400;font-size:.78rem;color:var(--muted);letter-spacing:0}
+.rate{font-size:.85rem;color:var(--muted);text-align:right}
+.rate b{color:var(--ink)}
+.proto{margin-block:12px;padding:10px 12px;border-radius:var(--r);background:var(--warn-bg);color:var(--warn);font-size:.85rem}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:4px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);z-index:6}
+nav.tabs button{flex:1;max-width:180px;border:0;background:none;padding:10px 8px;border-radius:10px;font-weight:700;color:var(--muted);cursor:pointer}
+nav.tabs button[aria-current="page"]{background:var(--bg);color:var(--ink)}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h2{font-size:1.35rem;font-weight:800}
+h3{font-size:1rem;font-weight:600}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi .v{font-family:var(--display);font-weight:800;font-size:1.7rem;line-height:1.1;margin-top:4px}
+.kpi .s{color:var(--muted);font-size:.85rem}
+.btn{border:1px solid var(--line);background:var(--surface);padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+.btn.primary{background:var(--crust);border-color:var(--crust);color:var(--crust-ink)}
+.btn.big{padding:16px;font-size:1.05rem;flex:1;min-width:0}
+.btn.ghost{background:none}
+.btn.danger{color:var(--debt)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:.78rem;font-weight:700;white-space:nowrap}
+.chip.debt{background:var(--debt-bg);color:var(--debt)} .chip.favor{background:var(--favor-bg);color:var(--favor)} .chip.zero{background:var(--bg);color:var(--muted)} .chip.warn{background:var(--warn-bg);color:var(--warn)}
+.amt-debt{color:var(--debt)} .amt-favor{color:var(--favor)}
+.split{display:grid;gap:16px}
+@media (min-width:900px){.split{grid-template-columns:minmax(300px,380px) 1fr;align-items:start}.only-mobile{display:none!important}}
+@media (max-width:899px){.split[data-mode="list"] .detail{display:none}.split[data-mode="detail"] .list{display:none}}
+.search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:.85rem;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+ul.clean{list-style:none;margin:0;padding:0}
+.cust{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px;border-radius:10px;cursor:pointer;border:1px solid transparent;width:100%;text-align:left;background:none}
+.cust:hover{background:var(--surface)} .cust[aria-current="true"]{background:var(--surface);border-color:var(--line)}
+.cust .n{font-weight:700;min-width:0} .cust .m{font-size:.8rem;color:var(--muted)}
+.cust .b{text-align:right;font-weight:700;white-space:nowrap}
+.hero-bal{padding:20px;border-radius:var(--r);background:var(--surface);border:1px solid var(--line)}
+.hero-bal .big{font-family:var(--display);font-weight:800;font-size:clamp(2.2rem,8vw,3.2rem);line-height:1;margin-block:6px}
+.hero-bal .ves{color:var(--muted)}
+.actions{display:flex;gap:10px}
+.hist li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.hist .d{font-weight:700;min-width:0} .hist .w{font-size:.8rem;color:var(--muted)}
+.hist .a{text-align:right;font-weight:700} .hist .ba{text-align:right;font-size:.8rem;color:var(--muted)}
+.hist .ops{grid-column:1/-1;display:flex;gap:8px}
+.hist .ops button{font-size:.8rem;padding:4px 10px}
+.void{opacity:.55} .void .d{text-decoration:line-through}
+table{border-collapse:collapse;width:100%}
+.tablewrap{overflow-x:auto}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+td.r,th.r{text-align:right}
+dialog{border:0;padding:0;border-radius:16px 16px 0 0;width:min(560px,100%);max-height:92vh;margin:auto auto 0;background:var(--surface);color:var(--ink)}
+@media (min-width:640px){dialog{border-radius:16px;margin:auto}}
+dialog::backdrop{background:rgb(0 0 0 / .45)}
+.sheet{display:flex;flex-direction:column;max-height:92vh}
+.sheet header{padding:16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sheet .body{padding:16px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.sheet footer{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.field{display:flex;flex-direction:column;gap:6px}
+.field input,.field select,.field textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.prod{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+.prod .p{font-size:.85rem;color:var(--muted)}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:1.2rem;font-weight:700;cursor:pointer}
+.stepper input{width:56px;text-align:center;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.price-edit{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--muted)}
+.price-edit input{width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.total{font-family:var(--display);font-weight:800;font-size:1.4rem}
+.err{color:var(--debt);font-size:.9rem}
+.note{font-size:.85rem;color:var(--muted)}
+pre.wa{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:.9rem;margin:0}
+.toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;z-index:50;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:pop .2s ease-out}@keyframes pop{from{opacity:0;transform:translate(-50%,8px)}}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">Panadería<small>Cuaderno de clientes · E1</small></div>
+    <div class="rate num">Tasa BCV hoy<br><b id="rateTxt"></b></div>
+  </header>
+  <div class="proto">Prototipo funcional de la Etapa 1 con datos de ejemplo. Las reglas de dinero son las de <code>spec/</code>; la dirección visual la elige el dueño en G0.5. Nada se guarda.</div>
+  <main id="view"></main>
+</div>
+<nav class="tabs" aria-label="Secciones">
+  <button data-tab="inicio">Inicio</button>
+  <button data-tab="clientes">Clientes</button>
+  <button data-tab="productos">Productos</button>
+</nav>
+<dialog id="dlg"><div class="sheet" id="sheet"></div></dialog>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+// ---------- dinero en centavos enteros (como Numeric(14,2)); reglas de 03 §3.10b ----------
+const DAY = 864e5;
+const NOW = new Date("2026-10-13T15:30:00-04:00").getTime();
+const RATE = 18520; // Bs por USD × 100 (ejemplo)
+const fmt = c => (c < 0 ? "−" : "") + "$" + (Math.abs(c) / 100).toFixed(2);
+const fmtBs = c => "Bs " + (Math.abs(c) * RATE / 10000).toLocaleString("es-VE", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const toCents = s => { const t = String(s).trim().replace(",", "."); if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN; return Math.round(parseFloat(t) * 100); };
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+const dt = t => new Date(t).toLocaleString("es-VE", {day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit", timeZone:"America/Caracas"});
+const dd = t => new Date(t).toLocaleDateString("es-VE", {day:"2-digit", month:"short", timeZone:"America/Caracas"});
+
+const S = {customers: [], recs: [], pays: [], log: [], seq: 1, now: NOW};
+const id = () => S.seq++;
+const products = [
+  {id:"p1", name:"Canilla", unit:"unidad", price:40, retail:50},
+  {id:"p2", name:"Pan campesino", unit:"unidad", price:120, retail:150},
+  {id:"p3", name:"Cachito de jamón", unit:"unidad", price:120, retail:150},
+  {id:"p4", name:"Golfeado", unit:"unidad", price:100, retail:120},
+  {id:"p5", name:"Pan sobado", unit:"unidad", price:80, retail:100},
+  {id:"p6", name:"Acemita", unit:"unidad", price:60, retail:75},
+  {id:"p7", name:"Pan de perro (paquete 8)", unit:"paquete", price:180, retail:null},
+  {id:"p8", name:"Pan de hamburguesa (paquete 6)", unit:"paquete", price:200, retail:null},
+];
+const priceFor = (p, c) => c.type === "RETAIL" ? (p.retail ?? p.price) : p.price;
+
+const cust = cid => S.customers.find(c => c.id === cid);
+const openRecs = cid => S.recs.filter(r => r.cid === cid && (r.status === "OPEN" || r.status === "PARTIAL"));
+const openDebt = cid => openRecs(cid).reduce((a, r) => a + r.amount - r.paid, 0);
+const overdue = cid => openRecs(cid).filter(r => r.dueAt < S.now).reduce((a, r) => a + r.amount - r.paid, 0);
+const balance = cid => openDebt(cid) - cust(cid).wallet;
+
+function settle(cid) {           // §3.5: CxC por dueAt ASC, issuedAt ASC
+  const c = cust(cid);
+  for (const r of openRecs(cid).sort((a, b) => a.dueAt - b.dueAt || a.issuedAt - b.issuedAt || a.id - b.id)) {
+    if (c.wallet <= 0) break;
+    const apply = Math.min(c.wallet, r.amount - r.paid);
+    c.wallet -= apply; r.paid += apply;
+    r.status = r.paid === r.amount ? "PAID" : "PARTIAL";
+  }
+}
+function log(cid, kind, desc, amount, ref, by = "Admin") { S.log.push({id: id(), cid, kind, desc, amount, at: S.now, by, balanceAfter: balance(cid), ...ref}); }
+
+function createCustomer({name, type, phone, opening = 0, creditDays = 7, creditLimit = 0}) {
+  const c = {id: id(), name, type, phone, wallet: 0, creditDays, creditLimit};
+  S.customers.push(c);
+  if (opening > 0) addRec(c.id, opening, "OPENING_BALANCE", "Saldo anterior", []);
+  if (opening < 0) { c.wallet += -opening; settle(c.id); log(c.id, "AJUSTE", "Saldo a favor anterior", opening, {}); }
+  return c;
+}
+function addRec(cid, amount, source, desc, items, dueDays) {
+  const c = cust(cid);
+  const r = {id: id(), cid, amount, paid: 0, status: "OPEN", source, desc, items, issuedAt: S.now, dueAt: S.now + (dueDays ?? c.creditDays) * DAY};
+  S.recs.push(r); settle(cid);
+  log(cid, source === "OPENING_BALANCE" ? "SALDO" : "FIADO", desc, amount, {recId: r.id});
+  return r;
+}
+function quoteFiado(cid, lines) {  // lo que haría POST /fiado/quote
+  const items = lines.filter(l => l.qty > 0).map(l => ({...l, lineTotal: Math.round(l.qty * l.unitPrice)}));
+  const total = items.reduce((a, i) => a + i.lineTotal, 0);
+  const c = cust(cid);
+  const before = balance(cid), after = before + total;
+  const debtAfter = Math.max(0, openDebt(cid) + Math.max(0, total - c.wallet));
+  const warning = c.creditLimit > 0 && debtAfter > c.creditLimit ? `Supera el límite de crédito (${fmt(c.creditLimit)}). Se registra igual.` : null;
+  return {items, total, before, after, warning};
+}
+function fiado(cid, lines, note) {
+  const q = quoteFiado(cid, lines);
+  if (!q.items.length) throw new Error("Agrega al menos un producto.");
+  if (q.items.some(i => !(i.unitPrice > 0))) throw new Error("El monto debe ser mayor que cero.");
+  const desc = q.items.map(i => `${fmtQty(i.qty)} ${i.name}`).join(", ") + (note ? ` · ${note}` : "");
+  return addRec(cid, q.total, "MANUAL", desc, q.items);
+}
+const fmtQty = q => Number.isInteger(q) ? String(q) : q.toFixed(3).replace(/0+$/, "").replace(".", ",");
+const METHODS = {PAGO_MOVIL: {name: "Pago móvil", cur: "VES", cash: false}, TRANSFERENCIA: {name: "Transferencia", cur: "VES", cash: false}, ZELLE: {name: "Zelle", cur: "USD", cash: false}, EFECTIVO: {name: "Efectivo", cur: "USD", cash: true}};
+function abono(cid, {method, amountLocal, reference, rate = RATE}) {
+  const m = METHODS[method];
+  if (!(amountLocal > 0)) throw new Error("El monto debe ser mayor que cero.");
+  if (!m.cash && !reference) throw new Error("Escribe la referencia del pago.");
+  if (reference && S.pays.some(p => p.method === method && p.reference === reference && p.status !== "REJECTED")) throw new Error("Esa referencia ya fue reportada.");
+  const amountUsd = m.cur === "VES" ? Math.round(amountLocal * 100 / rate) : amountLocal;
+  const p = {id: id(), cid, method, amountLocal, amountUsd, currency: m.cur, reference, status: "APPROVED", at: S.now};
+  S.pays.push(p);
+  cust(cid).wallet += amountUsd; settle(cid);
+  log(cid, "ABONO", `Abono ${m.name}${reference ? " · ref. " + reference : ""}${m.cur === "VES" ? " · " + fmtBsLocal(amountLocal) : ""}`, -amountUsd, {payId: p.id});
+  return p;
+}
+const fmtBsLocal = c => "Bs " + (c / 100).toLocaleString("es-VE", {minimumFractionDigits: 2});
+function voidRec(recId, reason) {   // §3.11: lo pagado vuelve y settle lo reaplica
+  const r = S.recs.find(x => x.id === recId), c = cust(r.cid);
+  if (r.status === "VOID" || r.source === "ORDER") throw new Error("Esta deuda no se puede anular.");
+  c.wallet += r.paid; r.status = "VOID"; settle(r.cid);
+  log(r.cid, "ANULACION", `Anulado: ${r.desc} · ${reason}`, -r.amount, {voids: recId});
+}
+function reversePay(payId, reason) { // §3.7
+  const p = S.pays.find(x => x.id === payId), c = cust(p.cid);
+  if (p.status !== "APPROVED") throw new Error("Solo se puede revertir un abono aprobado.");
+  const take = Math.min(c.wallet, p.amountUsd); c.wallet -= take;
+  const short = p.amountUsd - take;
+  p.status = "REVERSED";
+  if (short > 0) S.recs.push({id: id(), cid: p.cid, amount: short, paid: 0, status: "OPEN", source: "PAYMENT_REVERSAL", desc: "Abono revertido", items: [], issuedAt: S.now, dueAt: S.now});
+  log(p.cid, "REVERSO", `Abono revertido · ${reason}`, p.amountUsd, {reverses: payId});
+}
+
+// ---------- datos de ejemplo (se generan con las mismas reglas) ----------
+(function seed() {
+  const at = days => { S.now = NOW - days * DAY; };
+  at(20); const carmen = createCustomer({name: "Sra. Carmen Rojas", type: "RETAIL", phone: "+58 414-555-0121", opening: 1850});
+  at(19); const saman = createCustomer({name: "Bodega El Samán", type: "WHOLESALE", phone: "+58 424-555-0177", creditDays: 7, creditLimit: 6000});
+  const panas = createCustomer({name: "Perros Los Panas", type: "WHOLESALE", phone: "+58 412-555-0193", creditDays: 3});
+  const luis = createCustomer({name: "Sr. Luis Méndez", type: "RETAIL", phone: "+58 416-555-0140", opening: -400});
+  const yole = createCustomer({name: "Yolimar (vecina)", type: "RETAIL", phone: "", opening: 600});
+  const cafe = createCustomer({name: "Café La Esquina", type: "WHOLESALE", phone: "+58 414-555-0108"});
+  at(15); fiado(saman.id, [{name: "Canilla", unit: "unidad", qty: 60, unitPrice: 40}, {name: "Pan sobado", unit: "unidad", qty: 20, unitPrice: 80}]);
+  at(12); abono(saman.id, {method: "PAGO_MOVIL", amountLocal: 370400, reference: "004512"});
+  at(9); fiado(saman.id, [{name: "Canilla", unit: "unidad", qty: 80, unitPrice: 40}, {name: "Golfeado", unit: "unidad", qty: 24, unitPrice: 100}]);
+  at(8); fiado(panas.id, [{name: "Pan de perro (paquete 8)", unit: "paquete", qty: 15, unitPrice: 180}]);
+  at(6); fiado(carmen.id, [{name: "Canilla", unit: "unidad", qty: 10, unitPrice: 50}, {name: "Cachito de jamón", unit: "unidad", qty: 4, unitPrice: 150}]);
+  at(5); abono(carmen.id, {method: "EFECTIVO", amountLocal: 1000});
+  at(2); fiado(cafe.id, [{name: "Cachito de jamón", unit: "unidad", qty: 30, unitPrice: 120}]);
+  at(1); abono(panas.id, {method: "ZELLE", amountLocal: 1500, reference: "ZL-88213"});
+  S.now = NOW - 3 * 3600e3; fiado(yole.id, [{name: "Pan campesino", unit: "unidad", qty: 2, unitPrice: 150}]);
+  S.now = NOW - 1 * 3600e3; abono(cafe.id, {method: "TRANSFERENCIA", amountLocal: 277800, reference: "781203"});
+  S.now = NOW;
+})();
+
+// ---------- interfaz ----------
+const ui = {tab: "clientes", sel: null, q: "", filter: "todos"};
+const $ = s => document.querySelector(s);
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600); }
+function balChip(b) { return b > 0 ? `<span class="chip debt num">Debe ${fmt(b)}</span>` : b < 0 ? `<span class="chip favor num">A favor ${fmt(-b)}</span>` : `<span class="chip zero">Al día</span>`; }
+const typeTxt = t => t === "RETAIL" ? "Detal" : "Mayor";
+
+function render() {
+  $("#rateTxt").textContent = fmtBs(100) + " / $1 (ejemplo)";
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
+  $("#view").innerHTML = ui.tab === "inicio" ? viewInicio() : ui.tab === "productos" ? viewProductos() : viewClientes();
+}
+
+function viewInicio() {
+  const today = t => t >= NOW - 15.5 * 3600e3;   // día de Caracas del ejemplo
+  const all = S.customers.map(c => ({c, b: balance(c.id), o: overdue(c.id), d: openDebt(c.id)}));
+  const tot = all.reduce((a, x) => a + x.d, 0), ret = all.filter(x => x.c.type === "RETAIL").reduce((a, x) => a + x.d, 0);
+  const ab = S.pays.filter(p => (p.status === "APPROVED" || p.status === "REVERSED") && today(p.at));
+  const byM = {}; ab.forEach(p => byM[p.method] = (byM[p.method] || 0) + p.amountUsd);
+  const fi = S.recs.filter(r => r.source === "MANUAL" && r.status !== "VOID" && today(r.issuedAt));
+  const top = all.filter(x => x.b > 0).sort((a, b) => b.b - a.b).slice(0, 10);
+  const venc = all.filter(x => x.o > 0).length;
+  return `<div class="stack" style="margin-top:12px">
+    <h2>Inicio · hoy</h2>
+    <div class="kpis">
+      <div class="panel kpi"><div class="label">Por cobrar</div><div class="v num amt-debt">${fmt(tot)}</div><div class="s num">Detal ${fmt(ret)} · Mayor ${fmt(tot - ret)}</div></div>
+      <div class="panel kpi"><div class="label">Abonos de hoy</div><div class="v num">${fmt(ab.reduce((a, p) => a + p.amountUsd, 0))}</div><div class="s">${Object.entries(byM).map(([m, v]) => `${METHODS[m].name} ${fmt(v)}`).join(" · ") || "Sin abonos todavía"}</div></div>
+      <div class="panel kpi"><div class="label">Fiado de hoy</div><div class="v num">${fmt(fi.reduce((a, r) => a + r.amount, 0))}</div><div class="s">${fi.length} fiado${fi.length === 1 ? "" : "s"}</div></div>
+      <div class="panel kpi"><div class="label">Con deuda vencida</div><div class="v num">${venc}</div><div class="s">clientes</div></div>
+    </div>
+    <div class="panel"><h3 style="margin-bottom:8px">Top deudores</h3>
+      <ul class="clean">${top.map(x => `<li><button class="cust" data-open="${x.c.id}"><span class="n">${esc(x.c.name)}<div class="m">${typeTxt(x.c.type)}${x.o > 0 ? ` · <span class="amt-debt">vencido ${fmt(x.o)}</span>` : ""}</div></span><span class="b num amt-debt">${fmt(x.b)}</span></button></li>`).join("")}</ul>
+    </div></div>`;
+}
+
+function viewProductos() {
+  return `<div class="stack" style="margin-top:12px"><h2>Productos y precios</h2>
+  <p class="note">Precio <b>mayor</b> para mayoristas y precio <b>detal</b> para el mostrador. Si falta el detal, se usa el de mayor. El cambio masivo con vista previa llega en la versión real.</p>
+  <div class="panel tablewrap"><table><thead><tr><th>Producto</th><th>Unidad</th><th class="r">Mayor</th><th class="r">Detal</th><th class="r">Detal en Bs</th></tr></thead><tbody>
+  ${products.map(p => `<tr><td>${esc(p.name)}</td><td>${p.unit}</td><td class="r num">${fmt(p.price)}</td><td class="r num">${p.retail ? fmt(p.retail) : `<span class="note">usa mayor</span>`}</td><td class="r num">${fmtBs(p.retail ?? p.price)}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+}
+
+function viewClientes() {
+  let list = S.customers.map(c => ({c, b: balance(c.id), o: overdue(c.id)}));
+  const q = ui.q.trim().toLowerCase();
+  if (q) list = list.filter(x => x.c.name.toLowerCase().includes(q) || x.c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "") || "~"));
+  if (ui.filter === "deuda") list = list.filter(x => x.b > 0);
+  if (ui.filter === "vencidos") list = list.filter(x => x.o > 0);
+  list.sort((a, b) => b.b - a.b);
+  const total = S.customers.reduce((a, c) => a + openDebt(c.id), 0);
+  const mode = ui.sel ? "detail" : "list";
+  return `<div class="split" data-mode="${mode}" style="margin-top:12px">
+    <section class="list stack" aria-label="Clientes">
+      <div class="row" style="justify-content:space-between"><div><div class="label">Por cobrar</div><div class="total num amt-debt">${fmt(total)}</div></div>
+        <div class="row"><button class="btn" data-act="importar">Importar</button><button class="btn primary" data-act="nuevo">Nuevo cliente</button></div></div>
+      <input id="q" class="search" type="search" placeholder="Buscar por nombre o teléfono" value="${esc(ui.q)}" aria-label="Buscar cliente">
+      <div class="filters" role="group" aria-label="Filtro">${[["todos", "Todos"], ["deuda", "Con deuda"], ["vencidos", "Vencidos"]].map(([k, t]) => `<button data-filter="${k}" aria-pressed="${ui.filter === k}">${t}</button>`).join("")}</div>
+      <ul class="clean">${list.map(x => `<li><button class="cust" data-open="${x.c.id}" aria-current="${ui.sel === x.c.id}"><span class="n">${esc(x.c.name)}<div class="m">${typeTxt(x.c.type)}${x.o > 0 ? ` · <span class="amt-debt">vencido ${fmt(x.o)}</span>` : ""}</div></span><span class="b">${balChip(x.b)}</span></button></li>`).join("") || `<li class="note" style="padding:12px">No hay clientes con ese filtro.</li>`}</ul>
+    </section>
+    <section class="detail">${ui.sel ? viewFicha(ui.sel) : `<div class="panel note">Elige un cliente para ver su saldo, fiar o registrar un abono.</div>`}</section>
+  </div>`;
+}
+
+function viewFicha(cid) {
+  const c = cust(cid), b = balance(cid), o = overdue(cid);
+  const rows = S.log.filter(l => l.cid === cid).slice().reverse();
+  const voided = new Set(S.recs.filter(r => r.status === "VOID").map(r => r.id));
+  const reversed = new Set(S.pays.filter(p => p.status === "REVERSED").map(p => p.id));
+  return `<div class="stack">
+    <button class="btn ghost only-mobile" data-act="volver" style="align-self:flex-start">← Clientes</button>
+    <div class="hero-bal">
+      <div class="row" style="justify-content:space-between"><h2>${esc(c.name)}</h2><span class="chip zero">${typeTxt(c.type)}</span></div>
+      <div class="note">${c.phone ? esc(c.phone) : "Sin teléfono"} · crédito ${c.creditDays} días${c.creditLimit ? ` · límite ${fmt(c.creditLimit)}` : ""}</div>
+      <div style="margin-top:14px" class="label">${b > 0 ? "Debe" : b < 0 ? "A favor" : "Saldo"}</div>
+      <div class="big num ${b > 0 ? "amt-debt" : b < 0 ? "amt-favor" : ""}">${fmt(Math.abs(b))}</div>
+      <div class="ves num">${fmtBs(Math.abs(b))}${o > 0 ? ` · <span class="amt-debt">vencido ${fmt(o)}</span>` : ""}</div>
+    </div>
+    <div class="actions"><button class="btn primary big" data-act="fiar">Fiar productos</button><button class="btn big" data-act="abonar">Registrar abono</button></div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;margin-bottom:4px"><h3>Movimientos</h3><button class="btn" data-act="estado">Estado de cuenta</button></div>
+      <ul class="clean hist">${rows.map(l => {
+        const isVoid = l.recId && voided.has(l.recId), isRev = l.payId && reversed.has(l.payId);
+        const ops = l.recId && !isVoid && l.kind !== "AJUSTE" ? `<button class="btn danger" data-void="${l.recId}">Anular</button>` : l.payId && !isRev ? `<button class="btn danger" data-rev="${l.payId}">Revertir</button>` : "";
+        return `<li class="${isVoid || isRev ? "void" : ""}"><span class="d">${esc(l.desc)}</span><span class="a num ${l.amount > 0 ? "amt-debt" : "amt-favor"}">${l.amount > 0 ? "+" : "−"}${fmt(Math.abs(l.amount)).replace("−", "")}</span>
+          <span class="w">${({FIADO: "Fiado", SALDO: "Saldo anterior", ABONO: "Abono", ANULACION: "Anulación", REVERSO: "Reverso", AJUSTE: "Ajuste"})[l.kind]} · ${dt(l.at)} · ${l.by}</span><span class="ba num">saldo ${fmt(l.balanceAfter)}</span>
+          ${ops ? `<span class="ops">${ops}</span>` : ""}</li>`; }).join("") || `<li class="note">Sin movimientos todavía.</li>`}</ul>
+    </div></div>`;
+}
+
+// ---------- hojas (diálogos) ----------
+const dlg = $("#dlg");
+function openSheet(html, bind) { $("#sheet").innerHTML = html; dlg.showModal(); bind && bind(); }
+function closeSheet() { dlg.close(); }
+dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest("[data-close]")) closeSheet(); });
+
+function sheetFiar(cid) {
+  const c = cust(cid);
+  const lines = products.map(p => ({pid: p.id, name: p.name, unit: p.unit, qty: 0, unitPrice: priceFor(p, c)}));
+  const otro = {name: "Otro", unit: "", qty: 0, unitPrice: 0};
+  let key = "fiado-" + Date.now();   // Idempotency-Key: una por intento
+  openSheet(`<header><h3>Fiar a ${esc(c.name)}</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <div class="body">
+      <div class="note">Precios ${c.type === "RETAIL" ? "de detal" : "de mayor"}. Puedes cambiar el precio de cada línea.</div>
+      <div id="plist">${lines.map((l, i) => `<div class="prod"><div><b>${esc(l.name)}</b><div class="p num">${fmt(l.unitPrice)} / ${l.unit}</div></div>
+        <div class="stepper"><button type="button" data-dec="${i}" aria-label="Quitar uno">−</button><input id="qty${i}" inputmode="decimal" value="0" data-qty="${i}" aria-label="Cantidad de ${esc(l.name)}"><button type="button" data-inc="${i}" aria-label="Agregar uno">+</button></div>
+        <label class="price-edit">Precio $ <input id="pr${i}" inputmode="decimal" value="${(l.unitPrice / 100).toFixed(2)}" data-price="${i}"></label></div>`).join("")}
+        <div class="prod"><div><b>Otro</b><div class="p">Cargo libre con monto</div></div><div></div>
+          <label class="price-edit">Monto $ <input id="otroMonto" inputmode="decimal" placeholder="0,00"> <input id="otroDesc" placeholder="Descripción" style="width:auto;flex:1;min-width:0"></label></div>
+      </div>
+      <div class="field"><label for="fnote">Nota (opcional)</label><input id="fnote" placeholder="Ej.: lo retiró su hijo"></div>
+    </div>
+    <footer><div style="flex:1;min-width:0"><div class="label">Total (lo calcula la API)</div><div class="total num" id="ftot">$0.00</div><div class="note num" id="fbal"></div><div class="err" id="fwarn"></div></div>
+      <button class="btn primary" id="fgo" disabled>Fiar</button></footer>`, () => {
+    const sh = $("#sheet");
+    const recalc = () => {
+      const om = toCents($("#otroMonto").value || "0");
+      const all = [...lines, {...otro, name: $("#otroDesc").value.trim() || "Otro", qty: om > 0 ? 1 : 0, unitPrice: om > 0 ? om : 0}];
+      const q = quoteFiado(cid, all);
+      $("#ftot").textContent = fmt(q.total);
+      $("#fbal").textContent = q.total ? `Saldo: ${fmt(q.before)} → ${fmt(q.after)}` : "";
+      $("#fwarn").textContent = q.warning || "";
+      $("#fgo").disabled = !q.items.length;
+      return all;
+    };
+    sh.addEventListener("click", e => {
+      const i = e.target.dataset.inc ?? e.target.dataset.dec;
+      if (i === undefined) return;
+      lines[i].qty = Math.max(0, lines[i].qty + (e.target.dataset.inc !== undefined ? 1 : -1));
+      $("#qty" + i).value = fmtQty(lines[i].qty); recalc();
+    });
+    sh.addEventListener("input", e => {
+      const t = e.target;
+      if (t.dataset.qty !== undefined) { const v = parseFloat(t.value.replace(",", ".")); lines[t.dataset.qty].qty = v > 0 ? Math.round(v * 1000) / 1000 : 0; }
+      if (t.dataset.price !== undefined) { const v = toCents(t.value); lines[t.dataset.price].unitPrice = v > 0 ? v : 0; }
+      recalc();
+    });
+    $("#fgo").addEventListener("click", () => {
+      $("#fgo").disabled = true;
+      try { const r = fiado(cid, recalc(), $("#fnote").value.trim()); closeSheet(); render(); toast(`Fiado de ${fmt(r.amount)} registrado`); }
+      catch (err) { $("#fwarn").textContent = err.message; $("#fgo").disabled = false; }
+    });
+  });
+}
+
+function sheetAbonar(cid) {
+  const c = cust(cid), b = balance(cid);
+  openSheet(`<header><h3>Abono de ${esc(c.name)}</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <form class="body" id="af">
+      <div class="note num">${b > 0 ? `Debe ${fmt(b)} (${fmtBs(b)})` : "No tiene deuda: el abono queda a favor."}</div>
+      <div class="field"><label for="am">Método</label><select id="am">${Object.entries(METHODS).map(([k, m]) => `<option value="${k}">${m.name} (${m.cur === "VES" ? "Bs" : "USD"})</option>`).join("")}</select></div>
+      <div class="grid2"><div class="field"><label for="amt" id="amtLbl">Monto en Bs</label><input id="amt" inputmode="decimal" placeholder="0,00" required></div>
+        <div class="field" id="rateF"><label for="arate">Tasa del día</label><input id="arate" inputmode="decimal" value="${(RATE / 100).toFixed(2)}"></div></div>
+      <div class="field" id="refF"><label for="aref">Referencia</label><input id="aref" placeholder="Últimos dígitos" autocomplete="off"></div>
+      <div class="note num" id="aconv"></div><div class="err" id="aerr"></div>
+    </form>
+    <footer><button class="btn primary big" id="ago" form="af">Registrar abono</button></footer>`, () => {
+    const upd = () => {
+      const m = METHODS[$("#am").value];
+      $("#amtLbl").textContent = m.cur === "VES" ? "Monto en Bs" : "Monto en USD";
+      $("#rateF").hidden = m.cur !== "VES"; $("#refF").hidden = m.cash;
+      const v = toCents($("#amt").value), r = toCents($("#arate").value);
+      if (v > 0) { const usd = m.cur === "VES" ? Math.round(v * 100 / r) : v; $("#aconv").textContent = `Se abonan ${fmt(usd)} · saldo después ${fmt(b - usd)}`; } else $("#aconv").textContent = "";
+    };
+    $("#af").addEventListener("input", upd); upd();
+    $("#af").addEventListener("submit", e => {
+      e.preventDefault();
+      try {
+        const method = $("#am").value, m = METHODS[method];
+        const p = abono(cid, {method, amountLocal: toCents($("#amt").value), reference: m.cash ? "" : $("#aref").value.trim(), rate: toCents($("#arate").value)});
+        closeSheet(); render(); toast(`Abono de ${fmt(p.amountUsd)} registrado`);
+      } catch (err) { $("#aerr").textContent = err.message; }
+    });
+  });
+}
+
+function sheetConfirm(kind, refId) {
+  const isVoid = kind === "void";
+  openSheet(`<header><h3>${isVoid ? "Anular fiado" : "Revertir abono"}</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <form class="body" id="cf"><p class="note">${isVoid ? "Lo que ya se abonó sobre este fiado paga primero otras deudas; solo el sobrante queda a favor. Queda en el historial." : "La deuda vuelve a subir. Si no hay saldo a favor suficiente, la diferencia aparece como deuda vencida."}</p>
+      <div class="field"><label for="cr">Motivo (obligatorio)</label><input id="cr" required placeholder="${isVoid ? "Ej.: se registró dos veces" : "Ej.: el banco devolvió la transferencia"}"></div></form>
+    <footer><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" form="cf" style="margin-left:auto">${isVoid ? "Anular" : "Revertir"}</button></footer>`, () => {
+    $("#cf").addEventListener("submit", e => { e.preventDefault(); const r = $("#cr").value.trim(); (isVoid ? voidRec : reversePay)(refId, r); closeSheet(); render(); toast(isVoid ? "Fiado anulado" : "Abono revertido"); });
+  });
+}
+
+function sheetEstado(cid) {
+  const c = cust(cid), b = balance(cid);
+  const last = S.log.filter(l => l.cid === cid).slice(-6);
+  const txt = `*Panadería* · Estado de cuenta\n${c.name}\n\n${last.map(l => `${dd(l.at)}  ${l.desc.slice(0, 40)}  ${l.amount > 0 ? "+" : "-"}${fmt(Math.abs(l.amount)).replace("−", "")}`).join("\n")}\n\n${b > 0 ? `*Debe: ${fmt(b)}* (${fmtBs(b)})` : b < 0 ? `*A favor: ${fmt(-b)}*` : "*Al día*"}\nTasa BCV de hoy: ${fmtBs(100)}`;
+  openSheet(`<header><h3>Estado de cuenta</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <div class="body"><p class="note">Texto listo para pegar en WhatsApp (<code>format=whatsapp</code>).</p><pre class="wa" id="wa">${esc(txt)}</pre></div>
+    <footer><button class="btn primary big" id="cp">Copiar texto</button></footer>`, () => {
+    $("#cp").addEventListener("click", () => {
+      navigator.clipboard.writeText(txt).then(() => toast("Texto copiado"), () => { const r = document.createRange(); r.selectNodeContents($("#wa")); getSelection().removeAllRanges(); getSelection().addRange(r); toast("Selecciona y copia el texto"); });
+    });
+  });
+}
+
+function sheetNuevo() {
+  openSheet(`<header><h3>Nuevo cliente</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <form class="body" id="nf">
+      <div class="field"><label for="nn">Nombre</label><input id="nn" required placeholder="Ej.: Sra. Ana Pérez"></div>
+      <div class="grid2"><div class="field"><label for="nt">Tipo</label><select id="nt"><option value="RETAIL">Detal</option><option value="WHOLESALE">Mayor</option></select></div>
+        <div class="field"><label for="np">Teléfono</label><input id="np" inputmode="tel" placeholder="0414-1234567"></div></div>
+      <div class="field"><label for="no">Saldo anterior $ (negativo = a favor)</label><input id="no" inputmode="decimal" placeholder="0,00"></div>
+      <div class="err" id="nerr"></div></form>
+    <footer><button class="btn primary big" form="nf">Crear cliente</button></footer>`, () => {
+    $("#nf").addEventListener("submit", e => {
+      e.preventDefault();
+      const raw = $("#no").value.trim(), neg = raw.startsWith("-"), v = raw ? toCents(raw.replace(/^-/, "")) : 0;
+      if (Number.isNaN(v)) { $("#nerr").textContent = "Monto inválido: escribe 1234,56 sin puntos de miles."; return; }
+      const c = createCustomer({name: $("#nn").value.trim(), type: $("#nt").value, phone: $("#np").value.trim(), opening: neg ? -v : v});
+      ui.sel = c.id; closeSheet(); render(); toast("Cliente creado");
+    });
+  });
+}
+
+function sheetImportar() {
+  const sample = "nombre;telefono;tipo;deuda;nota\nSra. Elena Díaz;0414-5550111;detal;12,50;fiado de octubre\nKiosko San José;0424-5550122;mayor;48,00;\nSr. Pedro;0414-5550111;detal;5,00;\n;0412-5550199;detal;3,00;\nHermanos Rivas;;mayor;1.234,56;";
+  openSheet(`<header><h3>Importar deudores (CSV)</h3><button class="btn ghost" data-close>Cerrar</button></header>
+    <div class="body"><p class="note">Ejemplo de vista previa con un CSV de Excel (separador <code>;</code>, decimales con coma). Las filas con error no se importan.</p>
+      <div class="tablewrap"><table><thead><tr><th>Línea</th><th>Nombre</th><th>Tipo</th><th class="r">Deuda</th><th>Resultado</th></tr></thead><tbody id="imp"></tbody></table></div></div>
+    <footer><button class="btn primary big" id="ig">Importar filas válidas</button></footer>`, () => {
+    const seen = new Set(S.customers.map(c => c.phone.replace(/\D/g, "").slice(-10)).filter(Boolean));
+    const rows = sample.split("\n").slice(1).map((ln, i) => {
+      const [n, t, ty, d] = ln.split(";"), errs = [], ph = t.replace(/\D/g, "").slice(-10);
+      if (!n.trim()) errs.push("Falta el nombre");
+      if (ph) { if (seen.has(ph)) errs.push("Teléfono repetido"); seen.add(ph); }
+      const amt = d ? toCents(d) : 0; if (Number.isNaN(amt)) errs.push("Monto inválido: escribe 1234,56 sin puntos de miles");
+      return {line: i + 2, n, ty, amt, errs};
+    });
+    $("#imp").innerHTML = rows.map(r => `<tr><td class="num">${r.line}</td><td>${esc(r.n || "—")}</td><td>${r.ty}</td><td class="r num">${Number.isNaN(r.amt) ? "—" : fmt(r.amt)}</td><td>${r.errs.length ? `<span class="chip debt">${esc(r.errs.join("; "))}</span>` : `<span class="chip favor">Lista</span>`}</td></tr>`).join("");
+    $("#ig").addEventListener("click", () => {
+      const ok = rows.filter(r => !r.errs.length);
+      ok.forEach(r => createCustomer({name: r.n, type: r.ty === "mayor" ? "WHOLESALE" : "RETAIL", phone: "", opening: r.amt}));
+      closeSheet(); render(); toast(`${ok.length} clientes importados · ${rows.length - ok.length} con error`);
+    });
+  });
+}
+
+// ---------- eventos ----------
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t || dlg.contains(t)) return;
+  if (t.dataset.tab) { ui.tab = t.dataset.tab; if (ui.tab !== "clientes") ui.sel = null; render(); scrollTo(0, 0); }
+  else if (t.dataset.open) { ui.tab = "clientes"; ui.sel = +t.dataset.open; render(); if (innerWidth < 900) scrollTo(0, 0); }
+  else if (t.dataset.filter) { ui.filter = t.dataset.filter; render(); }
+  else if (t.dataset.void) sheetConfirm("void", +t.dataset.void);
+  else if (t.dataset.rev) sheetConfirm("rev", +t.dataset.rev);
+  else if (t.dataset.act === "volver") { ui.sel = null; render(); }
+  else if (t.dataset.act === "fiar") sheetFiar(ui.sel);
+  else if (t.dataset.act === "abonar") sheetAbonar(ui.sel);
+  else if (t.dataset.act === "estado") sheetEstado(ui.sel);
+  else if (t.dataset.act === "nuevo") sheetNuevo();
+  else if (t.dataset.act === "importar") sheetImportar();
+});
+document.addEventListener("input", e => { if (e.target.id === "q") { ui.q = e.target.value; const pos = e.target.selectionStart; render(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); } });
+ui.sel = S.customers[1].id;
+render();
+</script>

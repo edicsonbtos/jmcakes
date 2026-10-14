@@ -80,12 +80,12 @@ Cada etapa se diseña sobre el modelo completo de 02 y 03. Por eso no hay que re
 | Advertencia de límite | §3.10b: solo si `creditLimit > 0`; nunca bloquea | — (API) |
 
 **Escenarios de `spec` del cuaderno** (B-E1b los porta a services sobre Postgres):
-- los 7 `test_cuaderno_*`;
+- todos los `test_cuaderno_*` (8, incluido `test_cuaderno_flujo_completo_de_g3_e1`, que recorre el E2E de G3-E1);
 - `test_manual_charge_paid_from_wallet`, `test_m8_reversed_reference_stays_locked` y `test_r2_reference_unique_per_bank_account`;
 - la prueba de propiedades restringida a las operaciones de E1 (`fiado`, `opening`, `pay` + `approve`, `reverse` y `void`);
 - después de cada prueba, todas las invariantes.
 
-`spec`: **41 de 41 en verde**.
+`spec`: **54 de 54 en verde** (42 del modelo de dinero + 12 de coherencia del plan, `spec/test_plan_consistency.py`).
 
 ## E1 — Datos
 **La migración inicial crea el esquema completo de 02**, igual que dice FND, aunque E1 solo use una parte. Así se corrige v2.4, que pedía crear solo las tablas de E1. Los motivos:

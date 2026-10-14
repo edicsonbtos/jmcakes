@@ -10,9 +10,10 @@
   - el cuaderno de E1: fiado por líneas, saldo anterior (`OPENING_BALANCE`), abonos, anular y revertir;
   - vencimientos con ventana mínima de pago;
   - catálogo `ERROR_CODES`.
-- `spec/test_money_model.py` tiene **39 escenarios** (7 del cuaderno de E1) más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
+- `spec/test_money_model.py` tiene **40 escenarios** (8 del cuaderno de E1) más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
 - Resultados al cerrar la auditoría 1:
-  - `34 passed` (v2.2, tras la auditoría 2); `41 passed` (v2.5, tras la auditoría 3), más una corrida de 4.000 secuencias que incluye `fiado` y `opening`.
+  - `34 passed` (v2.2, tras la auditoría 2); `54 passed` (v2.5, tras la auditoría 3), más una corrida de 4.000 secuencias que incluye `fiado` y `opening`.
+- **`spec/test_plan_consistency.py`** (v2.5) valida el plan mismo: que el inventario de E1 sea un subconjunto del de 08 y que los conteos sean los que dicen 07, 08 y 09; que todo código de error citado esté en 03 §7; que las funciones y pruebas citadas en 09 existan; que los agentes de E1 que corren en paralelo no compartan carpetas; y que cada operación de E1 tenga un único router con dueño. Si un documento contradice a otro, `spec` se pone en rojo.
   - Corrida extendida de **4.000 secuencias × 80 operaciones (320.000 operaciones)** sin violaciones, con todas las ramas ejercitadas: OPEN_DEBT, OVERDUE_DEBT, bloqueos, condonación, anulación, reducción a 0 y referencias duplicadas.
 - Instalar y correr: `pip install -r spec/requirements.txt && python -m pytest spec -q`.
 - **Si la API y el modelo discrepan, manda el modelo**, salvo que se pruebe un error en él. En ese caso se corrigen el modelo y 03 en el mismo commit.

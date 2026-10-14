@@ -477,6 +477,28 @@ def test_cuaderno_anular_fiado_pagado_abona_otro_fiado_antes_de_quedar_a_favor(s
     shop.check_invariants()
 
 
+def test_cuaderno_flujo_completo_de_g3_e1(shop):
+    """El recorrido E2E de G3-E1 (09) sobre el modelo, con invariantes en cada paso."""
+    c = shop.register()
+    opening = shop.manual_charge(c.id, "50.00", source="OPENING_BALANCE")     # saldo anterior
+    shop.check_invariants()
+    f1 = shop.fiado(c.id, [("10", "0.50"), ("4", "1.25")])                     # 5.00 + 5.00
+    assert balance(shop, c.id) == D("60.00")
+    shop.approve(shop.report_payment(c.id, "40.00", reference="PM-1").id)       # abono parcial
+    assert balance(shop, c.id) == D("20.00")
+    big = shop.report_payment(c.id, "30.00", reference="ZL-1", method="ZELLE")
+    shop.approve(big.id)                                                       # sobrepago → a favor
+    assert balance(shop, c.id) == D("-10.00")
+    f2 = shop.fiado(c.id, [("1", "4.00")])                                     # consume el saldo a favor
+    assert balance(shop, c.id) == D("-6.00") and f2.status.name == "PAID"
+    shop.void_receivable(f1.id)                                                # anular: 10.00 vuelven a favor
+    assert balance(shop, c.id) == D("-16.00")
+    shop.reverse(big.id)                                                       # el Zelle rebotó
+    assert balance(shop, c.id) == D("14.00")
+    assert opening.status.name == "PAID"
+    shop.check_invariants()
+
+
 def test_cuaderno_saldo_anterior_se_anula_igual_que_manual(shop):
     c = shop.register()
     r = shop.manual_charge(c.id, "50.00", source="OPENING_BALANCE")

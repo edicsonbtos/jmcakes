@@ -4,7 +4,7 @@ Estados: `PENDIENTE` · `EN CURSO` · `LISTO PARA INTEGRAR` · `INTEGRADO` · `B
 
 | # | ID | Bloque | Fase | Estado | Rama | Handoff | Notas |
 |---|---|---|---|---|---|---|---|
-| — | PLAN | Plan v2.5 + spec + auditorías 1, 2, 2b y 3 | — | LISTO (G0) | `claude/happy-johnson-24innr` | `docs/plan/AUDITORIAS.md` | 155 hallazgos aplicados; spec 41/41 |
+| — | PLAN | Plan v2.5 + spec + auditorías 1, 2, 2b y 3 | — | LISTO (G0) | `claude/happy-johnson-24innr` | `docs/plan/AUDITORIAS.md` | 155 hallazgos aplicados; spec 54/54 |
 | — | G0.5 | Dirección visual (Impeccable) con el dueño | — | EN CURSO | — | — | Ronda de preguntas hecha (cocina iluminada en tablet; evitar: frío como banco, infantil, lujo); falta elegir la dirección |
 | — | **E1** | **Admin web + cuaderno de clientes** (ver 09) | E1 | **SIGUIENTE** | — | — | Agentes: FND-E1, DSN, B-E1a, B-E1b, W-E1, Q-E1 (ramas `block/<ID>`, 09 §E1 — Agentes). Inventario E1: 51 operaciones |
 | 1 | FND | Fundación API, BD, contrato | 0 | PENDIENTE | `block/FND` | — | |

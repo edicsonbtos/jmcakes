@@ -1,5 +1,7 @@
 # 04 — Fases y enjambre de 10 agentes (v2.1)
 
+> **v2.4:** el **orden de entrega** lo define [09 — Etapas](09-etapas-admin-primero.md): primero la web del administrador con el cuaderno de clientes (E1) y después pedidos y cocina (E2), la app del motorizado (E3) y la app del cliente (E4). Los agentes de este documento se reparten entre esas etapas. Sus fichas aplican **recortadas al alcance de la etapa en curso**.
+
 Una sesión **orquestadora** coordina el trabajo:
 - lanza los agentes, cada uno en su propio *git worktree*;
 - integra sus ramas en `claude/happy-johnson-24innr`, corre las compuertas de [07](07-pruebas.md) y publica;

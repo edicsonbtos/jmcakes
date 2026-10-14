@@ -221,3 +221,12 @@ GET /api/v1/admin/closures · GET /api/v1/admin/closures/{date} · GET /api/v1/a
 GET /api/v1/admin/export/{kind}
 ```
 `a|b` sobre la misma ruta base significa una operación por variante. Total: **105 operaciones**. FND las cuenta con `export_openapi.py --count`.
+
+## Agregados v2.4 (Etapa 1: cuaderno de clientes)
+| Ruta | Archivo | Rol | Notas |
+|---|---|---|---|
+| `POST /admin/customers/{id}/fiado` | `admin_money.py` | A | `Idempotency-Key`. `{items[{productId?, name?, qty, unitPrice?}], note?, dueDate?}` → CxC MANUAL con líneas (03 §3.10b). Respuesta: CxC + `balance` + `warning?` (límite superado). |
+| `POST /admin/customers/import/preview` | `customers.py` | A | Multipart CSV (`nombre, telefono, tipo, deuda, nota`) → `{rows[{line, data, errors[]}], previewToken}`. |
+| `POST /admin/customers/import/apply` | `customers.py` | A | `{previewToken}` → crea los clientes y sus CxC `OPENING_BALANCE`; idempotente por token. |
+
+`AdminCustomer` agrega los campos derivados `balance` y `balanceVes` (positivo = debe). `statement` acepta `format=whatsapp` (texto plano). Productos: `retailPrice`.

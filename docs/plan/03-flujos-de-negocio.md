@@ -193,8 +193,11 @@ Todos con `safe_job`, sesión propia y zona `America/Caracas`.
 | `unpaid_auto_cancel` | cada 10 min | Toma `orders` AWAITING_PAYMENT con `expiresAt < ahora` usando **`FOR UPDATE SKIP LOCKED`**. Cancela los que no tengan pagos PENDING_REVIEW o IN_REVIEW (§3.8, actor sistema). Idempotente. |
 | `daily_closing` | **00:05**, para el **día anterior** | Métricas del día de Caracas (por `approvedAt` y `confirmedAt` en SQL) + PDF. Upsert por fecha. Se reprocesa con `POST /admin/closures/{date}/run`. |
 
+### 3.10b Fiado de mostrador (admin, E1)
+El admin fía productos (líneas con precio de catálogo según el tipo de cliente: detal → `retailPrice`, mayorista → `price`; editable por línea) o un cargo libre. Se crea una CxC `MANUAL` con `receivable_items` y luego corre `settle`. **No** aplican `OPEN_DEBT` ni el límite de crédito: si el fiado supera `creditLimit`, el panel muestra una advertencia sin bloquear. El saldo anterior al migrar es una CxC `OPENING_BALANCE`. Saldo mostrado = deuda abierta − saldo a favor.
+
 ### 3.11 Anular o condonar una CxC (admin)
-- **Anular:** solo las CxC de source **MANUAL** o **PAYMENT_REVERSAL**. Las de un pedido se anulan cancelando el pedido (§3.8); si no, `409 RECEIVABLE_NOT_VOIDABLE`. Lo pagado vuelve con `RECEIVABLE_REFUND`; luego `VOID` (VOIDED) y `settle`.
+- **Anular:** solo las CxC de source **MANUAL**, **OPENING_BALANCE** o **PAYMENT_REVERSAL**. Las de un pedido se anulan cancelando el pedido (§3.8); si no, `409 RECEIVABLE_NOT_VOIDABLE`. Lo pagado vuelve con `RECEIVABLE_REFUND`; luego `VOID` (VOIDED) y `settle`.
 - **Condonar** (cualquier source, OPEN o PARTIAL):
   - `forgivenAmount = amount − paidAmount` y `amount = paidAmount`;
   - queda PAID, o VOID (FORGIVEN) si no se había pagado nada;

@@ -65,10 +65,21 @@ Es la panadería de barrio con la operación de una app de delivery:
 - Sin facturación fiscal en v1.
 - **Abierto:** nombre comercial definitivo (por ahora “Panadería”, configurable), logo y colores de marca, costo de delivery, horario de operación.
 
+## Retail Ledger (Etapa 1)
+La panadería también vende **al detal** y tiene una lista grande de clientes que deben (fiado). El panel reemplaza el cuaderno de deudas:
+- cada cliente tiene un **saldo** que sube cuando se le fían productos y baja con cada abono (con referencia y monto);
+- el sobrante queda a favor;
+- nada se borra: se anula o revierte con motivo.
+
 ## Brand Commitments
 
 - El nombre se muestra desde la configuración (`business.name`, por defecto “Panadería”) y el logo es reemplazable. Ninguna pantalla debe tener el nombre fijo en el código.
 - Voz: español de Venezuela, cercano y directo (“Tu pedido va en camino”), sin tecnicismos ni anglicismos innecesarios.
+
+## Anti-references (respuesta del dueño, 2026-10-07)
+- La cocina es un lugar **iluminado, con una tablet** a 1–2 metros.
+- El diseño **no** debe sentirse frío como un banco, ni infantil o caricaturesco, ni de pastelería de lujo que aleje al perro calentero y al bodeguero.
+- No hay identidad visual previa: diseño libre.
 
 ## Evidence on Hand
 

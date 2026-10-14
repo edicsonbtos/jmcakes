@@ -28,6 +28,7 @@ Plataforma para una panadería en Caracas (nombre comercial configurable). Reuti
   - [06 Reutilización de OpenGravity](docs/plan/06-reutilizacion-opengravity.md)
   - [07 Pruebas](docs/plan/07-pruebas.md)
   - [08 Endpoints](docs/plan/08-api-endpoints.md)
+  - **[09 Etapas: primero la web del administrador](docs/plan/09-etapas-admin-primero.md)**
 - [Fichas de los agentes](docs/plan/bloques/) y el [tablero de estado](docs/plan/STATUS.md).
 - [Cuestionario](docs/CUESTIONARIO.md).
 - [`spec/`](spec/): modelo ejecutable y probado de las reglas de dinero (`python -m pytest spec -q`).

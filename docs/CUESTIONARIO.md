@@ -42,6 +42,10 @@
 | C-35 | Devolver saldo a favor en dinero | Lo hace el admin desde la ficha del cliente; queda como egreso en la cuenta elegida. |
 | C-36 | Perdonar deuda | “Condonar” deja la deuda en lo ya pagado, sin devolver nada. “Anular” solo aplica a cargos manuales y reversos. |
 
+| C-38 | Precio de detal | Cada producto tiene precio **mayor** y precio **detal** (opcional; si falta, usa el de mayor). En el fiado se puede editar por línea. |
+| C-39 | Fiado y límite de crédito | El admin siempre puede fiar; si supera el límite, solo se muestra una advertencia. |
+| C-40 | Lista actual de deudores | Se importa por CSV (nombre, teléfono, tipo, deuda, nota) con vista previa. |
+
 ## Decisión pendiente del dueño (importante)
 
 | # | Pregunta | Recomendación |

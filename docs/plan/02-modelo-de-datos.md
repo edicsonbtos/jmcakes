@@ -37,7 +37,7 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 | Tabla | Columnas clave |
 |---|---|
 | `categories` | `name`, `sortOrder`, `isActive` |
-| `products` | `categoryId`, `name`, `description`, `unitLabel`, `price` (> 0), `minQty` (≥ 1), `imageFileId`, `isPublished`, `isAvailable`, `sortOrder` |
+| `products` | `categoryId`, `name`, `description`, `unitLabel`, `price` (> 0, precio **mayor**), `retailPrice` (null = usa `price`; precio **detal**), `minQty` (≥ 1), `imageFileId`, `isPublished`, `isAvailable`, `sortOrder` |
 | `price_history` | `productId`, `oldPrice`, `newPrice`, `changedBy`, `batchId`, `createdAt` |
 
 ## Pedidos
@@ -123,7 +123,7 @@ Otras columnas:
 
 | Columna | Notas |
 |---|---|
-| `customerId`, `source` | `source`: ORDER / MANUAL / PAYMENT_REVERSAL. |
+| `customerId`, `source` | `source`: ORDER / MANUAL (fiado o cargo del admin) / OPENING_BALANCE (saldo anterior; se comporta como MANUAL) / PAYMENT_REVERSAL. |
 | `orderId` | Único, null. |
 | `description` | |
 | `amount` | **≥ 0**; 0 solo en VOID. |
@@ -133,6 +133,8 @@ Otras columnas:
 | `issuedAt`, `dueAt` | |
 | `voidReason` | ORDER_CANCELLED, REDUCED, VOIDED, FORGIVEN. |
 | `voidedBy`, `voidedAt`, `note` | |
+
+**`receivable_items`**: líneas de un fiado. Columnas: `receivableId`, `productId` (null = cargo libre “Otro”), `productName`, `unitLabel`, `qty`, `unitPrice`, `lineTotal`. La suma de `lineTotal` es igual a `receivables.amount` al crearla.
 
 ## Cuentas del negocio (las `wallets` de OpenGravity, renombradas)
 | Tabla | Columnas clave |

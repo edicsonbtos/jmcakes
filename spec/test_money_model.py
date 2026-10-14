@@ -398,6 +398,38 @@ def test_r2_reference_unique_per_bank_account(shop):
     shop.report_payment(c.id, "5.00", reference="X", method="PAGO_MOVIL", bank_account="B2")
 
 
+# ---------------- Etapa 1: cuaderno de clientes (fiado de mostrador + abonos) ----------------
+def balance(shop, cid):
+    """Saldo que ve el admin: positivo = debe, negativo = a favor."""
+    return shop.open_debt(cid) - shop.customers[cid].wallet
+
+
+def test_cuaderno_fiado_y_abonos_suben_y_bajan_la_deuda(shop):
+    c = shop.register()                                # cliente de mostrador (sin app)
+    shop.manual_charge(c.id, "50.00")                  # saldo anterior al migrar
+    shop.manual_charge(c.id, "20.00")                  # fiado: 10 canillas + 4 panes
+    assert balance(shop, c.id) == D("70.00")
+    shop.approve(shop.report_payment(c.id, "30.00", reference="PM-1").id)   # abono con referencia
+    assert balance(shop, c.id) == D("40.00")
+    shop.approve(shop.report_payment(c.id, "50.00", reference="EFE-1", method="EFECTIVO").id)
+    assert balance(shop, c.id) == D("-10.00")          # queda $10 a favor
+    shop.manual_charge(c.id, "15.00")                  # nuevo fiado consume el saldo a favor
+    assert balance(shop, c.id) == D("5.00")
+    shop.check_invariants()
+
+
+def test_cuaderno_anular_fiado_y_revertir_abono(shop):
+    c = shop.register()
+    r = shop.manual_charge(c.id, "20.00")
+    p = shop.report_payment(c.id, "8.00", reference="X")
+    shop.approve(p.id)
+    shop.void_receivable(r.id)                         # el fiado fue un error: lo abonado vuelve a favor
+    assert balance(shop, c.id) == D("-8.00")
+    shop.reverse(p.id)                                 # el abono fue devuelto por el banco
+    assert balance(shop, c.id) == D("0.00")
+    shop.check_invariants()
+
+
 # --- Propiedades: cualquier secuencia de operaciones respeta las invariantes
 OPS = st.lists(st.tuples(
     st.sampled_from(["order", "sched", "pay", "pay_order", "approve", "reject", "cancel", "advance",

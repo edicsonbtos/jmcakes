@@ -5,7 +5,7 @@ Estados: `PENDIENTE` · `EN CURSO` · `LISTO PARA INTEGRAR` · `INTEGRADO` · `B
 | # | ID | Bloque | Fase | Estado | Rama | Handoff | Notas |
 |---|---|---|---|---|---|---|---|
 | — | PLAN | Plan v2.6 + spec + auditorías 1, 2, 2b, 3 y 3b | — | LISTO (G0) | `claude/happy-johnson-24innr` | `docs/plan/AUDITORIAS.md` | hallazgos aplicados; spec 58/58 |
-| — | G0.5 | Dirección visual (Impeccable) con el dueño | — | EN CURSO | — | — | Ronda de preguntas hecha (cocina iluminada en tablet; evitar: frío como banco, infantil, lujo); falta elegir la dirección |
+| — | G0.5 | Dirección visual (Impeccable) con el dueño | — | LISTO (panel admin) | `claude/happy-johnson-24innr` | `.impeccable/surfaces/web-src-app-admin.md` | 2026-10-20: el dueño eligió la salida estándar con **Uber y Rappi** como vara de calidad (ronda degradada: el servicio de sorteo está bloqueado por la red). `buildPath: code`. Cocina y apps: su brief se hace en su etapa. |
 | — | **E1** | **Admin web + cuaderno de clientes** (ver 09) | E1 | **SIGUIENTE** | — | — | Agentes: FND-E1, DSN, B-E1a, B-E1b, W-E1, Q-E1 (ramas `block/<ID>`, 09 §E1 — Agentes). Inventario E1: 51 operaciones |
 | 1 | FND | Fundación API, BD, contrato | 0 | PENDIENTE | `block/FND` | — | |
 | 2 | DSN | Diseño Impeccable + base web | 0 | PENDIENTE | `block/DSN` | — | |

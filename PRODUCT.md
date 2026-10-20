@@ -75,6 +75,7 @@ La panadería también vende **al detal** y tiene una lista grande de clientes q
 
 - El nombre se muestra desde la configuración (`business.name`, por defecto “Panadería”) y el logo es reemplazable. Ninguna pantalla debe tener el nombre fijo en el código.
 - Voz: español de Venezuela, cercano y directo (“Tu pedido va en camino”), sin tecnicismos ni anglicismos innecesarios.
+- **Referencia visual (decisión del dueño, 2026-10-20):** el estándar de las apps de delivery, con **Uber y Rappi** como vara de calidad: claridad, montos grandes, botón primario negro, hojas inferiores y un solo color de marca. Se ejecuta bien hecho y sin copiar sus marcas.
 
 ## Anti-references (respuesta del dueño, 2026-10-07)
 - La cocina es un lugar **iluminado, con una tablet** a 1–2 metros.

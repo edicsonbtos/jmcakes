@@ -1,6 +1,6 @@
 # 07 — Estrategia de pruebas y compuertas (v2.5)
 
-> **Durante E1** las compuertas, el inventario (51 operaciones) y los escenarios de aceptación (**CU-1…CU-12**) son los de [09](09-etapas-admin-primero.md). Los escenarios `E1`…`E17` de §2 son de pedidos y pagos del cliente, y aplican desde E2. No confundirlos con las etapas E1–E4.
+> **Durante E1** las compuertas, el inventario (52 operaciones) y los escenarios de aceptación (**CU-1…CU-12**) son los de [09](09-etapas-admin-primero.md). Los escenarios `E1`…`E17` de §2 son de pedidos y pagos del cliente, y aplican desde E2. No confundirlos con las etapas E1–E4.
 
 ## 1. El plan está probado: `spec/`
 - `spec/money_model.py` es la referencia ejecutable de 03 §1–§3. Incluye:
@@ -12,7 +12,7 @@
   - catálogo `ERROR_CODES`.
 - `spec/test_money_model.py` tiene **40 escenarios** (8 del cuaderno de E1) más una **prueba de propiedades** (Hypothesis, 500 ejemplos en CI) con las invariantes I-1…I-9 tras cada paso. Otra prueba exige que todo código del modelo esté en el catálogo de 03 §7.
 - Resultados al cerrar la auditoría 1:
-  - `34 passed` (v2.2, tras la auditoría 2); `54 passed` (v2.5, tras la auditoría 3), más una corrida de 4.000 secuencias que incluye `fiado` y `opening`.
+  - `34 passed` (v2.2, tras la auditoría 2); `54 passed` (v2.5, tras la auditoría 3); `58 passed` (v2.6, con el estado de cuenta y el reverso por error de carga; 20.000 secuencias de la propiedad del cuaderno sin fallas), más una corrida de 4.000 secuencias que incluye `fiado` y `opening`.
 - **`spec/test_plan_consistency.py`** (v2.5) valida el plan mismo: que el inventario de E1 sea un subconjunto del de 08 y que los conteos sean los que dicen 07, 08 y 09; que todo código de error citado esté en 03 §7; que las funciones y pruebas citadas en 09 existan; que los agentes de E1 que corren en paralelo no compartan carpetas; y que cada operación de E1 tenga un único router con dueño. Si un documento contradice a otro, `spec` se pone en rojo.
   - Corrida extendida de **4.000 secuencias × 80 operaciones (320.000 operaciones)** sin violaciones, con todas las ramas ejercitadas: OPEN_DEBT, OVERDUE_DEBT, bloqueos, condonación, anulación, reducción a 0 y referencias duplicadas.
 - Instalar y correr: `pip install -r spec/requirements.txt && python -m pytest spec -q`.
@@ -59,7 +59,7 @@
 | Gate | Responsable | Condición |
 |---|---|---|
 | **G0** fin del plan | orquestador | `spec` verde · 2 auditorías aplicadas · CLAUDE.md coherente con v2. |
-| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las operaciones del inventario de 08 que correspondan a la etapa (**51 en E1**; **110** con todo); cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
+| **G1** fin de Fase 0 | orquestador | FND: `pytest` verde; `alembic upgrade head` → `downgrade base` → `upgrade head` sobre una base aparte; `alembic check` sin diferencias; `test_contract_inventory.py` en verde: las operaciones del inventario de 08 que correspondan a la etapa (**52 en E1**; **111** con todo); cada fábrica de 08 importable y probada; `bootstrap` y `seed` idempotentes. DSN: `DESIGN.md`, tokens y specs; `web` lint/test/build verdes. **Luego el orquestador:** integra FND y DSN, ejecuta `cd web && npm run gen:api` (commit de `web/src/lib/api-types.ts`), publica, verifica CI y recién entonces crea los worktrees de la Fase 1. |
 | **G2** fin de Fase 1 (6 agentes) | orquestador | Cada rama con sus pruebas verdes y su handoff · `git diff --stat` dentro de sus carpetas · tras integrar: suite completa verde, `alembic heads` = 1, contrato y `api-types.ts` regenerados · **CI verde en `api.yml`, `contract.yml`, `secrets.yml` y `web.yml` (lint/test/build)**. `e2e-web` y `android.yml` pueden quedar en rojo: sus fallas se registran en STATUS.md y pasan a G3 (Q1 la web, Q2 Android). |
 | **G3** fin de Fase 2 | orquestador + Q1/Q2 | E2E E1–E14 verdes en CI · staging: `/api/health` OK, `get_database_tables` con las tablas de 02, `alembic_version` = head, login de admin en staging verificado por `curl` (API y página de login) y por el job `staging-smoke` · `android.yml` verde con pruebas > 0 · auditor contable y `/security-review` sin hallazgos altos · `impeccable detect`/`audit` sin críticos. |
 

@@ -510,6 +510,114 @@ def test_cuaderno_saldo_anterior_se_anula_igual_que_manual(shop):
     shop.check_invariants()
 
 
+# ---------------- v2.6: abono idempotente, reverso por error de carga, estado de cuenta ----------------
+def assert_statement_matches(shop, cid):
+    rows = shop.statement(cid)
+    assert (rows[-1][3] if rows else D("0.00")) == balance(shop, cid)
+
+
+def test_cuaderno_reintento_de_abono_no_duplica_ni_choca_con_la_referencia(shop):
+    c = shop.register()
+    shop.fiado(c.id, [("2", "5.00")])
+    p1 = shop.manual_payment(c.id, "4.00", reference="PM-9", idem="a-1")
+    p2 = shop.manual_payment(c.id, "4.00", reference="PM-9", idem="a-1")   # mala señal: mismo pago
+    assert p1 is p2 and balance(shop, c.id) == D("6.00")
+    with pytest.raises(DomainError) as e:
+        shop.manual_payment(c.id, "5.00", reference="PM-9", idem="a-1")
+    assert e.value.code == "IDEMPOTENCY_CONFLICT"
+    shop.manual_payment(c.id, "1.00", method="EFECTIVO", idem="a-2")       # efectivo sin referencia
+    shop.manual_payment(c.id, "1.00", method="EFECTIVO", idem="a-3")
+    assert balance(shop, c.id) == D("4.00")
+    shop.check_invariants()
+
+
+def test_cuaderno_revertir_por_error_de_carga_libera_la_referencia(shop):
+    c, otro = shop.register(), shop.register()
+    shop.manual_charge(c.id, "50.00")
+    p = shop.manual_payment(otro.id, "50.00", reference="123456")   # cargado al cliente equivocado
+    shop.reverse(p.id, entry_error=True)
+    shop.manual_payment(c.id, "50.00", reference="123456")          # se registra bien
+    assert balance(shop, c.id) == D("0.00") and balance(shop, otro.id) == D("0.00")
+    devuelto = shop.manual_payment(c.id, "5.00", reference="777")
+    shop.reverse(devuelto.id)                                       # el banco lo devolvió: sigue bloqueada
+    with pytest.raises(DomainError) as e:
+        shop.manual_payment(c.id, "5.00", reference="777")
+    assert e.value.code == "DUPLICATE_REFERENCE"
+    app = cash_customer_with_wallet(shop, "5.00")
+    app_pay = next(x for x in shop.payments.values() if x.customer_id == app.id)
+    with pytest.raises(DomainError) as e:                           # solo abonos MANUAL
+        shop.reverse(app_pay.id, entry_error=True)
+    assert e.value.code == "PAYMENT_NOT_REVERSIBLE"
+    shop.check_invariants()
+
+
+def test_cuaderno_estado_de_cuenta_cuadra_tras_cada_operacion(shop):
+    c = shop.register()
+    ops = [
+        lambda: shop.manual_charge(c.id, "12.00", source="OPENING_BALANCE"),
+        lambda: shop.fiado(c.id, [("10", "0.60")]),
+        lambda: shop.manual_payment(c.id, "20.00", reference="E1"),
+        lambda: shop.fiado(c.id, [("1", "9.00")]),
+        lambda: shop.void_receivable(max(shop.receivables)),
+        lambda: shop.reverse(next(iter(shop.payments))),
+        lambda: shop.manual_payment(c.id, "30.00", reference="E2"),
+        lambda: shop.payout(c.id, "3.00"),
+        lambda: shop.adjust(c.id, "1.00"),
+        lambda: shop.fiado(c.id, [("1", "40.00")]),
+        lambda: shop.forgive_receivable(max(shop.receivables)),
+    ]
+    for op in ops:
+        op()
+        assert_statement_matches(shop, c.id)
+        shop.check_invariants()
+    kinds = [k for _, k, _, _ in shop.statement(c.id)]
+    assert kinds[:3] == ["SALDO_ANTERIOR", "FIADO", "ABONO"] and "REVERSO" in kinds and "CONDONACION" in kinds
+
+
+CUADERNO_OPS = st.lists(st.tuples(
+    st.sampled_from(["opening", "fiado", "abono", "void", "reverse", "reverse_err", "forgive",
+                     "adjust", "payout"]),
+    st.integers(min_value=0, max_value=50),
+    st.integers(min_value=-3000, max_value=9000),
+), max_size=40)
+
+
+@settings(max_examples=300, deadline=None)
+@given(CUADERNO_OPS)
+def test_property_cuaderno_estado_de_cuenta_e_invariantes(ops):
+    shop = Shop()
+    custs = [shop.register(), shop.register()]
+    for n, (op, i, cents) in enumerate(ops):
+        c = custs[i % 2]
+        amount = str(D(abs(cents) or 1) / 100)
+        recs = [r for r in shop.receivables.values() if r.customer_id == c.id]
+        pays = [p for p in shop.payments.values() if p.customer_id == c.id]
+        try:
+            if op == "opening":
+                if cents > 0:
+                    shop.manual_charge(c.id, amount, source="OPENING_BALANCE")
+                else:
+                    shop.adjust(c.id, amount)
+            elif op == "fiado":
+                shop.fiado(c.id, [(str(i % 5 + 1), "0.60"), ("1", amount)])
+            elif op == "abono":
+                shop.manual_payment(c.id, amount, reference=f"r{n % 9}", idem=f"a{n % 11}")
+            elif op in ("void", "forgive") and recs:
+                r = recs[i % len(recs)]
+                (shop.void_receivable if op == "void" else shop.forgive_receivable)(r.id)
+            elif op in ("reverse", "reverse_err") and pays:
+                shop.reverse(pays[i % len(pays)].id, entry_error=op == "reverse_err")
+            elif op == "adjust":
+                shop.adjust(c.id, str(D(cents) / 100))
+            elif op == "payout":
+                shop.payout(c.id, amount)
+        except DomainError:
+            pass
+        for x in custs:
+            assert_statement_matches(shop, x.id)
+        shop.check_invariants()
+
+
 # --- Propiedades: cualquier secuencia de operaciones respeta las invariantes
 OPS = st.lists(st.tuples(
     st.sampled_from(["order", "sched", "pay", "pay_order", "approve", "reject", "cancel", "advance",

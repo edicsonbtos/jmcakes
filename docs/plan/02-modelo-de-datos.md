@@ -23,15 +23,15 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 | Columna | Notas |
 |---|---|
 | `userId` | null = cliente sin app; único. |
-| `type` | `CustomerType` RETAIL / WHOLESALE. Por defecto WHOLESALE al registrarse. |
+| `type` | `CustomerType` RETAIL / WHOLESALE. Decide el precio del fiado. Por defecto WHOLESALE al registrarse desde la app; desde el panel es **obligatorio** y viene marcado en RETAIL (v2.6). |
 | `segment` | `CustomerSegment` null: HOTDOG, BODEGA, CAFE_RESTAURANT, EVENTS, OTHER. |
-| `businessName`, `contactName`, `phone`, `idDocument` | |
+| `businessName`, `contactName`, `phone`, `idDocument` | `phone` normalizado a E.164 al crear, editar e importar (v2.6). |
 | `addressText`, `addressReference` | |
 | `paymentMode` | `PaymentMode` CASH / CREDIT. Default **CASH**. |
 | `creditLimit` | Numeric ≥ 0, default 0. |
 | `creditDays` | int, default `credit.defaultDays`. |
 | `walletBalance` | Numeric default 0. **`ck_customers_wallet_nonneg`**: ≥ 0. Solo lo escribe el ledger. |
-| `isBlocked`, `blockedReason`, `notes`, `deletedAt` | `deletedAt`: cuenta eliminada por el cliente (anonimizada). |
+| `isBlocked`, `blockedReason`, `notes`, `deletedAt` | `notes` guarda el apodo (“la del kiosko”) y es buscable. `deletedAt`: cuenta eliminada por el cliente (anonimizada). |
 
 ## Catálogo
 | Tabla | Columnas clave |
@@ -94,9 +94,10 @@ FND implementa **todo** este modelo en la migración Alembic inicial. Los bloque
 | `reference`, `paidOn`, `senderName`, `proofFileId` | |
 | `status` | PENDING_REVIEW, IN_REVIEW, APPROVED, REJECTED, REVERSED. |
 | `reviewingAdminId`, `inReviewAt`, `approvedBy`, `approvedAt`, `rejectionReason`, `reversedBy`, `reversedAt`, `reversalReason` | |
+| `reversalKind` | null; al revertir: BANK_RETURN (devuelto o falso) / ENTRY_ERROR (error de carga; solo `purpose = MANUAL`). v2.6. |
 | `correctedFrom` | JSON null: valores originales si el admin corrigió el monto o la tasa. |
 
-**`uq_payments_bank_account_reference_live`**: único `(bankAccountId, reference)` `WHERE status <> 'REJECTED' AND reference IS NOT NULL`. La transferencia la identifican la cuenta destino y la referencia; solo un rechazo libera la referencia.
+**`uq_payments_bank_account_reference_live`**: único `(bankAccountId, reference)` `WHERE status <> 'REJECTED' AND reference IS NOT NULL AND NOT (status = 'REVERSED' AND "reversalKind" = 'ENTRY_ERROR')`. La transferencia la identifican la cuenta destino y la referencia; solo un rechazo o un reverso por error de carga liberan la referencia.
 
 Prohibido el borrado físico de pagos.
 
@@ -124,6 +125,7 @@ Otras columnas:
 | Columna | Notas |
 |---|---|
 | `customerId`, `source` | `source`: ORDER / MANUAL (fiado o cargo del admin) / OPENING_BALANCE (saldo anterior; se comporta como MANUAL) / PAYMENT_REVERSAL. |
+| `createdByUserId` | null = sistema. Quién fió o cargó el saldo anterior (columna “quién” del estado de cuenta). v2.6. |
 | `orderId` | Único, null. |
 | `description` | |
 | `amount` | **≥ 0**; 0 solo en VOID. |
@@ -133,6 +135,7 @@ Otras columnas:
 | `issuedAt`, `dueAt` | |
 | `voidReason` | ORDER_CANCELLED, REDUCED, VOIDED, FORGIVEN. |
 | `voidedBy`, `voidedAt`, `note` | |
+| `voidNote` | Motivo libre al anular o condonar (obligatorio en el panel). v2.6. |
 
 **`receivable_items`**: líneas de un fiado. Columnas: `receivableId`, `productId` (null = cargo libre “Otro”), `productName`, `unitLabel`, `qty` (`Numeric(10,3)`, > 0), `unitPrice` (> 0), `lineTotal` (= `round(qty × unitPrice, 2)`). La suma de `lineTotal` es igual a `receivables.amount` al crearla (03 §3.10b). **Solo inserción**: anular un fiado no toca sus líneas.
 

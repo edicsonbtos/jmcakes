@@ -1,4 +1,4 @@
-# 09 — Entrega por etapas: primero la web del administrador (v2.5)
+# 09 — Entrega por etapas: primero la web del administrador (v2.6)
 
 > **Decisión del dueño (2026-10-14):** se construye **primero la web del administrador**, empezando por el **cuaderno de clientes** (fiado de mostrador y abonos), y a partir de ahí las demás apps. **Sin sobreingeniería.**
 >
@@ -26,9 +26,10 @@ Cada etapa se diseña sobre el modelo completo de 02 y 03. Por eso no hay que re
    - **cambio de contraseña obligatorio en el primer ingreso** (`mustChangePassword`);
    - restablecer la contraseña de otro administrador.
 2. **Clientes** (detal y mayoristas, sin app por ahora):
-   - lista con **saldo** (debe / a favor) y búsqueda por nombre, negocio, teléfono o cédula/RIF;
+   - lista con **saldo** (debe / a favor) y búsqueda por nombre, negocio, teléfono (por dígitos: “0414…” sirve), cédula/RIF o **apodo** (va en `notes`);
    - filtros “con deuda” y “vencidos”, ordenada por mayor deuda;
-   - total “Por cobrar” arriba.
+   - total “Por cobrar” arriba;
+   - “Nuevo cliente”: el **tipo** (detal o mayor) es obligatorio y viene marcado en detal, porque decide el precio del fiado.
 3. **Ficha del cliente:**
    - **saldo grande**: “Debe $X (Bs Y)” o “A favor $X”;
    - dos botones principales: **Fiar productos** y **Registrar abono**;
@@ -41,10 +42,11 @@ Cada etapa se diseña sobre el modelo completo de 02 y 03. Por eso no hay que re
    - **Total en vivo:** lo calcula la API con `fiado/quote`; la web no calcula dinero.
 5. **Registrar abono:**
    - **Datos:** monto, moneda (USD o Bs), **referencia de pago** (no se pide en efectivo), método (pago móvil, transferencia, Zelle o efectivo), cuenta donde entró y fecha. En Bs, la conversión usa la tasa del día del pago, y el admin puede corregirla (`bcvRateUsed`).
+   - **Antes de confirmar** se ve “Abona $X (Bs Y a tasa del dd/mm) → queda debiendo $Z”, calculado por la API con `manual-payment/quote`.
    - **Efecto en el saldo:** la deuda **baja**, empezando por la que **vence primero**. Si el abono supera la deuda, el sobrante queda **a favor**.
 6. **Corregir errores:**
    - **Anular un fiado o un saldo anterior** (con motivo): lo ya abonado sobre él se reaplica a las otras deudas, y solo el sobrante queda a favor.
-   - **Revertir un abono** (con motivo): la deuda vuelve a subir. Si no hay saldo a favor suficiente, la diferencia aparece como deuda vencida.
+   - **Revertir un abono** (con motivo): la deuda vuelve a subir. Si no hay saldo a favor suficiente, la diferencia aparece como deuda vencida. El panel pregunta por qué: “Me equivoqué al registrarlo” (`ENTRY_ERROR`: libera la referencia para cargarlo bien) o “El banco lo devolvió” (`BANK_RETURN`: la referencia queda bloqueada).
    - Nada se borra: todo queda en el historial y en la auditoría.
 7. **Carga inicial:**
    - al crear un cliente se puede poner su **saldo anterior** (deuda, o saldo a favor si es negativo);
@@ -73,19 +75,21 @@ Cada etapa se diseña sobre el modelo completo de 02 y 03. Por eso no hay que re
 |---|---|---|
 | Fiar productos | §3.10b: CxC `MANUAL` con líneas, `dueAt` por `creditDays`, sin OPEN_DEBT ni límite; luego `settle` | `fiado` |
 | Saldo anterior | §3.10b: CxC `OPENING_BALANCE` (deuda) o `ADJUSTMENT(+)` (a favor) | `manual_charge(source="OPENING_BALANCE")` · `adjust` |
-| Registrar abono | §3.10b + §3.4: pago `purpose = MANUAL` APPROVED, entra a la billetera; `settle` por `dueAt ASC`; el sobrante queda a favor | `report_payment` + `approve` |
+| Registrar abono | §3.10b + §3.4: pago `purpose = MANUAL` APPROVED, entra a la billetera; `settle` por `dueAt ASC`; el sobrante queda a favor; la llave antes que la referencia | `manual_payment` (`report_payment` + `approve`) |
 | Anular fiado o saldo anterior | §3.11 Anular: lo pagado vuelve y `settle` lo reaplica | `void_receivable` |
-| Revertir abono | §3.7: si no alcanza el saldo a favor, la diferencia es una CxC `PAYMENT_REVERSAL` vencida | `reverse` |
+| Revertir abono | §3.7: si no alcanza el saldo a favor, la diferencia es una CxC `PAYMENT_REVERSAL` vencida; `ENTRY_ERROR` libera la referencia | `reverse(entry_error)` |
 | Saldo y vencido | §3.10b: `balance = openDebt − walletBalance`; vencido = `dueAt < ahora` | `balance()` en las pruebas |
+| Estado de cuenta | §3.10b: efecto por tipo de fila; la suma acumulada es el saldo | `statement` |
 | Advertencia de límite | §3.10b: solo si `creditLimit > 0`; nunca bloquea | — (API) |
 
 **Escenarios de `spec` del cuaderno** (B-E1b los porta a services sobre Postgres):
-- todos los `test_cuaderno_*` (8, incluido `test_cuaderno_flujo_completo_de_g3_e1`, que recorre el E2E de G3-E1);
+- todos los `test_cuaderno_*` (11, incluidos `test_cuaderno_flujo_completo_de_g3_e1`, que recorre el E2E de G3-E1, `test_cuaderno_revertir_por_error_de_carga_libera_la_referencia` y `test_cuaderno_estado_de_cuenta_cuadra_tras_cada_operacion`);
+- `test_property_cuaderno_estado_de_cuenta_e_invariantes` (el estado de cuenta cuadra con el saldo tras cualquier secuencia del cuaderno);
 - `test_manual_charge_paid_from_wallet`, `test_m8_reversed_reference_stays_locked` y `test_r2_reference_unique_per_bank_account`;
 - la prueba de propiedades restringida a las operaciones de E1 (`fiado`, `opening`, `pay` + `approve`, `reverse` y `void`);
 - después de cada prueba, todas las invariantes.
 
-`spec`: **54 de 54 en verde** (42 del modelo de dinero + 12 de coherencia del plan, `spec/test_plan_consistency.py`).
+`spec`: **58 de 58 en verde** (46 del modelo de dinero + 12 de coherencia del plan, `spec/test_plan_consistency.py`).
 
 ## E1 — Datos
 **La migración inicial crea el esquema completo de 02**, igual que dice FND, aunque E1 solo use una parte. Así se corrige v2.4, que pedía crear solo las tablas de E1. Los motivos:
@@ -141,7 +145,7 @@ Agregados respecto a v2.3, ya incluidos en 02:
 
 El esquema de E1 solo tiene estos campos. E2 agrega los de pedidos de 03 §6 sin quitar ninguno.
 
-## E1 — API (51 operaciones; subconjunto de 08 + 5 nuevas)
+## E1 — API (52 operaciones; subconjunto de 08 + 6 nuevas)
 **Inventario E1** (lo compara `test_contract_inventory.py` durante E1; en E2 se amplía hacia el de 08):
 ```
 GET /api/health
@@ -155,11 +159,11 @@ GET /api/v1/settings/public · GET|PATCH /api/v1/admin/settings · GET /api/v1/a
 GET /api/v1/rates/today · GET /api/v1/admin/rates · POST /api/v1/admin/rates/manual|sync
 GET|POST /api/v1/admin/payment-methods · PATCH /api/v1/admin/payment-methods/{id} · GET|POST /api/v1/admin/bank-accounts · PATCH /api/v1/admin/bank-accounts/{id}
 GET|POST /api/v1/admin/cash-accounts · GET /api/v1/admin/cash-accounts/{id}/transactions
-POST /api/v1/admin/customers/{id}/fiado/quote · POST /api/v1/admin/customers/{id}/fiado · POST /api/v1/admin/customers/{id}/manual-payment
+POST /api/v1/admin/customers/{id}/fiado/quote · POST /api/v1/admin/customers/{id}/fiado · POST /api/v1/admin/customers/{id}/manual-payment · POST /api/v1/admin/customers/{id}/manual-payment/quote
 POST /api/v1/admin/receivables/{id}/void · POST /api/v1/admin/payments/{id}/reverse · GET /api/v1/admin/customers/{id}/statement
 GET /api/v1/admin/dashboard/summary
 ```
-**Nuevas respecto a v2.3:** `fiado`, `fiado/quote`, `import/preview`, `import/apply` y `auth/change-password`. Su contrato está en 08 §Agregados.
+**Nuevas respecto a v2.3:** `fiado`, `fiado/quote`, `manual-payment/quote` (v2.6), `import/preview`, `import/apply` y `auth/change-password`. Su contrato está en 08 §Agregados.
 
 Notas de E1 sobre operaciones existentes:
 - **`auth`:** solo el rol ADMIN inicia sesión en E1. `register`, `device-tokens` y `DELETE /auth/account` llegan en E4.
@@ -167,7 +171,7 @@ Notas de E1 sobre operaciones existentes:
 - **`POST /admin/customers/{id}/credit`:** en E1 solo guarda `creditLimit` y `creditDays` (`paymentMode` queda CASH) y audita, sin push.
 - **`/admin/settings`:** en E1 solo las secciones `business` y `credit`. `/settings/public` alimenta el nombre del negocio en la barra superior.
 - **`/admin/cash-accounts`:** no tiene PATCH (08). Para desactivar una cuenta, se desactiva su `bank_account` o su método.
-- **`reverse` y `void`:** piden `{reason}`. En la ficha, el `paymentId` y el `receivableId` salen de las filas del estado de cuenta.
+- **`reverse` y `void`:** `void {reason}` y `reverse {reason, kind}` (03 §3.7). En la ficha, el `paymentId` y el `receivableId` salen de las filas del estado de cuenta.
 - Lo que no está en el inventario **no existe** en E1: ni rutas 501, ni stubs, ni pantallas vacías, ni menús.
 
 ## E1 — Pantallas (web admin)
@@ -190,8 +194,9 @@ Notas de E1 sobre operaciones existentes:
 
 **Requisitos de uso:**
 - **Teléfono primero:** el dueño registra un abono en menos de 15 segundos desde el celular. La ficha muestra el saldo arriba y los dos botones al alcance del pulgar.
-- **Fiar rápido:** buscador de productos con − / + y el total en vivo de `fiado/quote` (con *debounce* de 300 ms). El `Idempotency-Key` se genera **una vez por intento** de guardar.
+- **Fiar rápido:** buscador de productos con − / + y el total en vivo de `fiado/quote` (con *debounce* de 300 ms). El `Idempotency-Key` se crea al abrir el formulario y se **reutiliza en los reintentos** de ese mismo guardado (fiado, abono, anular, revertir e importar); el botón queda deshabilitado hasta la respuesta.
 - **Confirmación** antes de anular o revertir, con el motivo obligatorio.
+- **WhatsApp:** “Enviar estado de cuenta” con la plantilla de 08 (`wa.me`; sin teléfono, compartir o copiar).
 
 ## E1 — Agentes (6), carpetas y orden
 Cada agente es la ficha de 04 **recortada a E1**. Cuando la ficha y este documento no coinciden, manda este documento. Las ramas, bases y puertos se toman de 05 §1, con estos nombres:
@@ -225,7 +230,7 @@ Cada agente es la ficha de 04 **recortada a E1**. Cuando la ficha y este documen
 **Recortes por agente:**
 - **FND-E1:**
   - esquema **completo** de 02;
-  - contrato y routers **solo del inventario E1** (sin 501). `test_contract_inventory` usa las 51 operaciones de E1;
+  - contrato y routers **solo del inventario E1** (sin 501). `test_contract_inventory` usa las 52 operaciones de E1;
   - auth: login, refresh, logout, me y **change-password** (más sus pruebas, incluida E15);
   - interfaces de E1: `CustomersService`, `SettingsService`, `AuditService`, `RateService`, `FinanceQueries` y `MoneyService.open_balance`. Las de pedidos, eventos, push y archivos llegan con E2–E4;
   - solo el job `bcv_sync` registrado;
@@ -235,7 +240,8 @@ Cada agente es la ficha de 04 **recortada a E1**. Cuando la ficha y este documen
   - auth web (`/login`, refresh, logout, `proxy.ts` para `/admin` y `/cambiar-contrasena`);
   - `(admin)/layout.tsx` con el Sidebar inicial y `/design`;
   - `docs/design/admin.md` con las pantallas de E1 y sus **textos exactos**;
-  - pantallas de muestra: **ficha del cliente a 390 px** y **lista de clientes a 1440 px**.
+  - pantallas de muestra: **ficha del cliente a 390 px** y **lista de clientes a 1440 px**;
+  - `web/railway.toml` (RAILPACK, `next start` en `$PORT`, healthcheck `/login`), que pide el despliegue de 01.
   - Quedan para su etapa: la cocina (layout, Wake Lock, sonidos, manifest), `useEventStream`, las páginas públicas y las especificaciones y el tema de Android.
 - **B-E1a:**
   - catálogo sin fotos y sin `GET /catalog`;
@@ -272,10 +278,10 @@ Cada agente sigue el protocolo 05: worktree propio, sin push, y el orquestador i
 |---|---|---|---|---|
 | CU-1 | Crear cliente con saldo anterior (deuda y a favor); `dueAt` según `creditDays` | B-E1a (con `money_double`) · B-E1b (`open_balance`) | ✅ | ✅ |
 | CU-2 | Fiar con líneas: precio detal o mayor según el tipo, precio editado, cargo libre, redondeo por línea; `quote` = `fiado` | B-E1b | ✅ | ✅ |
-| CU-3 | Abono parcial USD con referencia; abono en Bs con la tasa de `paidOn` y tasa corregida; efectivo sin referencia | B-E1b | ✅ | ✅ |
+| CU-3 | Abono parcial USD con referencia; abono en Bs con la tasa de `paidOn` y tasa corregida; efectivo sin referencia; `manual-payment/quote` = `manual-payment` | B-E1b | ✅ | ✅ |
 | CU-4 | Sobrepago → a favor; nuevo fiado consume el saldo a favor | B-E1b | ✅ | ✅ |
 | CU-5 | Anular un fiado pagado → se reaplica a otro fiado; el sobrante queda a favor | B-E1b | ✅ | ✅ |
-| CU-6 | Revertir un abono con y sin saldo a favor → CxC `PAYMENT_REVERSAL` vencida | B-E1b | ✅ | ✅ |
+| CU-6 | Revertir un abono con y sin saldo a favor → CxC `PAYMENT_REVERSAL` vencida; `ENTRY_ERROR` libera la referencia y `BANK_RETURN` no; el estado de cuenta cuadra con el saldo | B-E1b | ✅ | ✅ |
 | CU-7 | `DUPLICATE_REFERENCE` en la misma cuenta; idempotencia de fiado y abono (misma llave = mismo recurso; otro contenido = 409) | B-E1b | ✅ | — |
 | CU-8 | Importar CSV: errores por fila, `apply` crea clientes y saldos, token repetido = mismo resultado, token vencido = 409 | B-E1a | ✅ | ✅ |
 | CU-9 | Límite de crédito: advertencia sin bloquear; sin advertencia con límite 0 | B-E1b | ✅ | ✅ |
@@ -287,7 +293,7 @@ Todas las pruebas de dinero terminan con `assert_money_invariants`.
 
 ## E1 — Compuertas
 - **G1-E1:**
-  - FND-E1: `pytest` verde; migración upgrade → downgrade → upgrade; `alembic check` sin cambios; inventario E1 (51); fábricas E1; `bootstrap` y `seed` idempotentes.
+  - FND-E1: `pytest` verde; migración upgrade → downgrade → upgrade; `alembic check` sin cambios; inventario E1 (52); fábricas E1; `bootstrap` y `seed` idempotentes.
   - DSN: tokens, UI kit, `/login`, layout del admin, `admin.md`; web lint, test y build verdes; `impeccable detect` sin críticos.
   - Luego el orquestador ejecuta `gen:api` y publica.
 - **G2-E1:**
@@ -304,7 +310,8 @@ Todas las pruebas de dinero terminan con `assert_money_invariants`.
 
 **Requiere al dueño en E1:**
 - elegir la dirección visual (G0.5, unos minutos);
-- aprobar el despliegue en Railway;
+- instalar o verificar la GitHub App de Railway con acceso a `jmcakes`;
+- aprobar el despliegue en staging y, después, la creación y el despliegue de **producción** (Neon `main`, entorno Railway `production`, `SEED_DEMO=0`). Staging, con datos de prueba, sirve solo para verificar; la lista real de deudores se importa en producción;
 - **entregar la lista de deudores** (CSV o Excel: nombre, teléfono, tipo, deuda), los precios de mayor y detal, y los métodos de cobro con sus cuentas;
 - decidir C-37 (hacer privado el repositorio) antes de copiar código de OpenGravity.
 

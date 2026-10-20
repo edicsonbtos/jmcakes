@@ -152,7 +152,11 @@ W ≥ amountUsd → PAYMENT_REVERSAL(−amountUsd)
 si no         → PAYMENT_REVERSAL(−W) + CxC(source=PAYMENT_REVERSAL, amount = amountUsd − W, dueAt = ahora)
 cash_account EXPENSE espejo del INCOME (mismo monto y moneda); status = REVERSED; audit_logs
 ```
-La referencia queda bloqueada para siempre. Los pedidos ya confirmados **no** se cancelan solos; la deuda creada bloquea nuevos pedidos (§2: `OPEN_DEBT` u `OVERDUE_DEBT`).
+`reverse {reason, kind}` (v2.6):
+- `BANK_RETURN` (transferencia devuelta o falsa): la referencia queda bloqueada para siempre.
+- `ENTRY_ERROR` (solo abonos `purpose = MANUAL`; el admin se equivocó de cliente o de monto): los mismos movimientos de dinero, pero la referencia **se libera** para registrar el abono bien (02, `uq_payments_bank_account_reference_live`). En otro pago → `409 PAYMENT_NOT_REVERSIBLE`.
+
+Los pedidos ya confirmados **no** se cancelan solos; la deuda creada bloquea nuevos pedidos (§2: `OPEN_DEBT` u `OVERDUE_DEBT`).
 
 ### 3.8 Cancelar un pedido
 - **Quién puede:**
@@ -210,11 +214,27 @@ Modelo: `Shop.fiado` y `Shop.manual_charge(source=…)` en `spec/money_model.py`
 - **Abono:** es un pago `purpose = MANUAL` que nace APPROVED (§3.4 sin revisión, con la misma corrección opcional de `bcvRateUsed`). Luego corre `settle`.
   - La `reference` es obligatoria salvo en métodos de efectivo.
   - En efectivo, el dinero entra a la `bank_account` “Caja” del método, ligada a su cuenta del negocio.
+  - **Idempotencia (v2.6):** la `Idempotency-Key` se verifica **antes** que la referencia. Un reintento por mala señal devuelve el mismo pago, no `DUPLICATE_REFERENCE`; la misma llave con otro contenido → `409 IDEMPOTENCY_CONFLICT`. Modelo: `Shop.manual_payment`.
+  - `manual-payment/quote` devuelve, sin escribir, el `amountUsd`, la tasa usada y el saldo antes y después, para confirmar “Abona $X (Bs Y a tasa del dd/mm) → queda debiendo $Z”.
 - **Orden en que se paga:** el de `settle` (§3.5), es decir, CxC por `dueAt ASC` y luego `issuedAt ASC`. Primero se paga la que **vence primero**.
 - **Anular un fiado o un saldo anterior (§3.11):** lo ya abonado vuelve a la billetera y `settle` lo **reaplica** a las demás deudas abiertas. Solo el sobrante queda a favor.
 - **Revertir un abono (§3.7):** si el saldo a favor no alcanza, la diferencia nace como CxC `PAYMENT_REVERSAL` con `dueAt = ahora`, y por eso aparece vencida.
 - **Saldo mostrado** = `openDebt − walletBalance` (positivo = debe). **Deuda vencida** (`overdueDebt`) = Σ(`amount − paidAmount`) de las CxC OPEN o PARTIAL con `dueAt < ahora`.
   - `credit.blockOverdueDays` solo se usa para bloquear pedidos (§2), no para mostrar.
+- **Estado de cuenta (v2.6).** Filas ordenadas por la fecha del evento y, a igual fecha, por id. Modelo: `Shop.statement`.
+
+| Fila | Efecto en el saldo |
+|---|---|
+| `SALDO_ANTERIOR` · `FIADO` | + monto original de la CxC |
+| `ABONO` | − `amountUsd` |
+| `REVERSO` | + `amountUsd` (incluye la CxC `PAYMENT_REVERSAL` que crea) |
+| `ANULACION` | − monto de la CxC al anular |
+| `CONDONACION` | − `forgivenAmount` |
+| `AJUSTE` | − monto del ajuste (el saldo a favor anterior es un ajuste positivo) |
+| `DEVOLUCION` (payout) | + monto |
+
+  - `balanceAfter` de cada fila = suma acumulada desde `openingBalance`, y la última es igual al saldo. Lo prueban `test_cuaderno_estado_de_cuenta_cuadra_tras_cada_operacion` y `test_property_cuaderno_estado_de_cuenta_e_invariantes`.
+  - Los movimientos internos (`RECEIVABLE_SETTLEMENT`, `RECEIVABLE_REFUND`) no son filas. En E2 se agregan las filas de pedidos.
 
 ### 3.11 Anular o condonar una CxC (admin)
 - **Anular:** solo las CxC de source **MANUAL**, **OPENING_BALANCE** o **PAYMENT_REVERSAL**. Las de un pedido se anulan cancelando el pedido (§3.8); si no, `409 RECEIVABLE_NOT_VOIDABLE`. Lo pagado vuelve con `RECEIVABLE_REFUND`; luego `VOID` (VOIDED) y `settle`.

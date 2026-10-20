@@ -201,3 +201,23 @@ Lentes: 09 como subconjunto de 03 y 08, cobertura de `spec/` para las reglas de 
 - **`spec/`:** 41 pruebas en verde (v2.5) y pruebas de estrés de 320.000 operaciones aleatorias (v2.2) y de 4.000 secuencias con fiado y saldo anterior (v2.5), sin violar invariantes.
 - **Contrato:** inventario de 110 operaciones (51 en E1), contadas por script.
 - **Temas corregidos:** reglas de dinero; concurrencia; propiedad de archivos entre agentes; contrato y eventos; sesión web con refresh; infraestructura (Railway, Neon, CI, Android); experiencia de usuario (horarios, avisos al dueño, datos móviles, Play Store); seguridad del código reutilizado.
+
+## Auditoría 3b (v2.5 → v2.6): segunda pasada independiente sobre v2.4
+Una corrida paralela de 4 lentes (coherencia, reglas del cuaderno contra `spec`, uso en el teléfono y viabilidad de ejecución) dio 39 hallazgos. La mayoría ya estaba resuelta en v2.5. Se aplicaron los que faltaban:
+
+| Tema | Corrección |
+|---|---|
+| Un abono mal cargado bloqueaba su referencia para siempre | `reverse {reason, kind}`: `ENTRY_ERROR` (solo abonos MANUAL) libera la referencia; `BANK_RETURN` no (02 `reversalKind` e índice, 03 §3.7, C-44). |
+| El abono en Bs no se podía revisar antes de guardarlo | `manual-payment/quote` (08; inventario E1 de 52 y total de 111). |
+| Reintento de abono con mala señal → `DUPLICATE_REFERENCE` | La llave se verifica antes que la referencia (03 §3.10b, `Shop.manual_payment`). |
+| Estado de cuenta sin fórmula | Efecto por tipo de fila y saldo resultante = suma acumulada (03 §3.10b, `Shop.statement`), probado tras cada operación y con una prueba de propiedades. `receivables.createdByUserId` y `voidNote` en 02. |
+| Búsqueda de clientes | Por dígitos del teléfono y por apodo en `notes`; teléfono en E.164 (02, 08). |
+| Tipo de cliente creado en el panel | Obligatorio y marcado en detal (02, C-45). |
+| WhatsApp | Plantilla de 1500 caracteres, `wa.me` o compartir (08). |
+| Idempotencia en la web | La llave se crea al abrir el formulario y se reutiliza en los reintentos (09). |
+| Despliegue | `web/railway.toml` a DSN; GitHub App de Railway y producción separada de staging en “Requiere al dueño” (09, C-46). |
+
+El prototipo `docs/prototipos/cuaderno-e1.html` todavía no pregunta el tipo de reverso. Para eso manda 09.
+
+**Resultado:** `spec` 58/58 en verde, más 20.000 secuencias de la propiedad del cuaderno sin fallas.
+

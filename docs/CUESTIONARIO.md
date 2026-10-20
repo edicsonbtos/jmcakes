@@ -46,6 +46,9 @@
 | C-40 | Lista actual de deudores | Se importa por CSV (nombre, teléfono, tipo, deuda, nota) con vista previa. Una deuda negativa es saldo a favor (09 §Carga inicial). |
 | C-42 | Vencimiento del fiado | Vence a los `creditDays` del cliente (por defecto 7); el admin puede poner otra fecha. Las deudas importadas cuentan desde el día de la importación. |
 | C-43 | Referencia del abono | Obligatoria en pago móvil, transferencia y Zelle; no se pide en efectivo. |
+| C-44 | Abono cargado por error | “Revertir → Me equivoqué al registrarlo” libera la referencia para cargarlo bien; “El banco lo devolvió” la deja bloqueada. |
+| C-45 | Tipo de cliente al crearlo en el panel | Obligatorio y marcado en **detal** (precio detal), porque decide el precio del fiado. |
+| C-46 | Dónde se trabaja con datos reales | En **producción** (se crea con tu aprobación). Staging tiene datos de prueba y solo sirve para verificar. |
 
 ## Decisión pendiente del dueño (importante)
 

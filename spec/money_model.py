@@ -12,6 +12,9 @@ v2.1 (auditoría 1): reducción con fórmula `cobrado − nuevo total`, RECEIVAB
 WALLET_PAYOUT, condonar/anular CxC, OPEN_DEBT/OVERDUE_DEBT para todo modo, bloqueo de
 cliente, ventana mínima de pago, referencia bloqueada también si REVERSED, paymentStatus
 de pedidos a crédito que se pagan, catálogo de códigos de error.
+
+v2.6 (cuaderno E1): abono manual idempotente, reverso por error de carga que libera la
+referencia y estado de cuenta cuya suma acumulada es el saldo.
 """
 from __future__ import annotations
 
@@ -30,8 +33,11 @@ ERROR_CODES = {
     "INVALID_TRANSITION", "ORDER_NOT_CANCELLABLE", "ONLY_REDUCTION", "ORDER_NOT_PAYABLE",
     "DUPLICATE_REFERENCE", "PAYMENT_NOT_REVIEWABLE", "PAYMENT_NOT_REVERSIBLE",
     "ADJUSTMENT_EXCEEDS_BALANCE", "PAYOUT_EXCEEDS_BALANCE", "RECEIVABLE_NOT_VOIDABLE",
-    "INVALID_AMOUNT", "ORDER_NOT_REDUCIBLE",
+    "INVALID_AMOUNT", "ORDER_NOT_REDUCIBLE", "IDEMPOTENCY_CONFLICT",
 }
+
+# Orden canónico de eventos para el estado de cuenta (en la API: fecha del evento y, a igual fecha, id).
+_SEQ = count(1)
 
 
 def q(x) -> Decimal:
@@ -88,6 +94,7 @@ class Movement:
     order_id: int | None = None
     receivable_id: int | None = None
     payment_id: int | None = None
+    seq: int = field(default_factory=lambda: next(_SEQ))
 
 
 @dataclass
@@ -131,6 +138,9 @@ class Receivable:
     status: RS = RS.OPEN
     void_reason: str | None = None
     items: list = field(default_factory=list)   # receivable_items (fiado, 03 §3.10b)
+    seq: int = field(default_factory=lambda: next(_SEQ))
+    void_seq: int | None = None
+    forgive_seq: int | None = None
 
 
 @dataclass
@@ -146,10 +156,14 @@ class Payment:
     customer_id: int
     amount_usd: Decimal
     method: str
-    reference: str
+    reference: str | None
     order_id: int | None = None
     bank_account: str = "BANCO-1"
     status: PS = PS.PENDING_REVIEW
+    manual: bool = False          # abono registrado por el admin (purpose = MANUAL)
+    entry_error: bool = False     # revertido por error de carga: libera la referencia (v2.6)
+    approved_seq: int | None = None
+    reversed_seq: int | None = None
 
 
 class Shop:
@@ -172,6 +186,7 @@ class Shop:
         self.kitchen_events: list[tuple[str, int]] = []
         self._ids = count(1)
         self._idem: dict[tuple[int, str], int] = {}
+        self._idem_ops: dict[tuple[int, str], tuple[object, object]] = {}
 
     # ---------- ledger (único que toca el saldo) ----------
     def _move(self, c: Customer, type_: str, amount: Decimal, **refs) -> None:
@@ -385,13 +400,16 @@ class Shop:
             o.payment_status = "ON_CREDIT" if r.status in (RS.OPEN, RS.PARTIAL) else "PAID"
 
     # ---------- pagos (§3.3–§3.7) ----------
-    def report_payment(self, cid: int, amount_usd: str, reference: str, method: str = "PAGO_MOVIL",
+    def report_payment(self, cid: int, amount_usd: str, reference: str | None, method: str = "PAGO_MOVIL",
                        order_id: int | None = None, bank_account: str = "BANCO-1") -> Payment:
         if q(amount_usd) <= ZERO:
             raise DomainError("INVALID_AMOUNT")
-        # R2-M8: la referencia es única por cuenta destino (no por método)
-        if any(p.bank_account == bank_account and p.reference == reference and p.status in REFERENCE_LOCKING
-               for p in self.payments.values()):
+        # R2-M8: la referencia es única por cuenta destino (no por método). Un REVERSED por error
+        # de carga ya no la bloquea (v2.6). Sin referencia (efectivo) no hay chequeo.
+        if reference is not None and any(
+                p.bank_account == bank_account and p.reference == reference and p.status in REFERENCE_LOCKING
+                and not (p.status == PS.REVERSED and p.entry_error)
+                for p in self.payments.values()):
             raise DomainError("DUPLICATE_REFERENCE")
         if order_id is not None:  # la API toma FOR UPDATE del pedido aquí (M10)
             o = self.orders[order_id]
@@ -412,7 +430,7 @@ class Shop:
             p.amount_usd = q(corrected_usd)
         c = self.customers[p.customer_id]
         self._move(c, "TOPUP_APPROVED", p.amount_usd, payment_id=p.id)
-        p.status = PS.APPROVED
+        p.status, p.approved_seq = PS.APPROVED, next(_SEQ)
         self.settle(c.id, priority=p.order_id)
         self._extend_pay_window(p.order_id)
 
@@ -431,9 +449,11 @@ class Shop:
         p.status = PS.REJECTED
         self._extend_pay_window(p.order_id)  # §3.6: ventana para reportar otro pago
 
-    def reverse(self, pid: int) -> None:
+    def reverse(self, pid: int, entry_error: bool = False) -> None:
+        """§3.7. entry_error (solo abonos MANUAL): el admin se equivocó al registrarlo; mismos
+        movimientos de dinero, pero la referencia queda libre para registrarlo bien (v2.6)."""
         p = self.payments[pid]
-        if p.status != PS.APPROVED:
+        if p.status != PS.APPROVED or (entry_error and not p.manual):
             raise DomainError("PAYMENT_NOT_REVERSIBLE")
         c = self.customers[p.customer_id]
         take = min(c.wallet, p.amount_usd)
@@ -443,7 +463,7 @@ class Shop:
             r = Receivable(id=next(self._ids), customer_id=c.id, amount=short, issued_at=self.now,
                            due_at=self.now, source="PAYMENT_REVERSAL")
             self.receivables[r.id] = r
-        p.status = PS.REVERSED
+        p.status, p.entry_error, p.reversed_seq = PS.REVERSED, entry_error, next(_SEQ)
 
     # ---------- operaciones manuales del admin ----------
     def adjust(self, cid: int, amount: str) -> None:
@@ -490,6 +510,53 @@ class Shop:
             items.append(ReceivableItem(Decimal(qty), Decimal(price), q(Decimal(qty) * Decimal(price))))
         return self.manual_charge(cid, str(sum(i.line_total for i in items)), due_in_days, items=items)
 
+    def manual_payment(self, cid: int, amount_usd: str, reference: str | None = None,
+                       method: str = "PAGO_MOVIL", bank_account: str = "BANCO-1",
+                       idem: str | None = None) -> Payment:
+        """§3.10b: abono del admin; nace APPROVED y corre settle. La llave se verifica ANTES que la
+        referencia: un reintento por mala señal devuelve el mismo pago, no DUPLICATE_REFERENCE."""
+        body = (q(amount_usd), reference, method, bank_account)
+        if idem is not None and (cid, idem) in self._idem_ops:
+            prev_body, prev = self._idem_ops[(cid, idem)]
+            if prev_body != body:
+                raise DomainError("IDEMPOTENCY_CONFLICT")
+            return prev
+        p = self.report_payment(cid, amount_usd, reference=reference, method=method, bank_account=bank_account)
+        p.manual = True
+        self.approve(p.id)
+        if idem is not None:
+            self._idem_ops[(cid, idem)] = (body, p)
+        return p
+
+    def statement(self, cid: int) -> list[tuple[int, str, Decimal, Decimal]]:
+        """§3.10b: estado de cuenta E1, filas (orden, tipo, efecto, saldo resultante).
+        La última fila es igual a balance = deuda abierta − saldo a favor. Sin pedidos: E2 agrega sus filas."""
+        assert not any(o.customer_id == cid for o in self.orders.values()), "estado de cuenta E1: sin pedidos"
+        rows: list[tuple[int, str, Decimal]] = []
+        for r in self.receivables.values():
+            if r.customer_id != cid:
+                continue
+            if r.source in ("MANUAL", "OPENING_BALANCE"):   # la CxC PAYMENT_REVERSAL va dentro del REVERSO
+                kind = "SALDO_ANTERIOR" if r.source == "OPENING_BALANCE" else "FIADO"
+                rows.append((r.seq, kind, q(r.amount + r.forgiven)))
+            if r.forgive_seq is not None:
+                rows.append((r.forgive_seq, "CONDONACION", -r.forgiven))
+            if r.void_seq is not None:
+                rows.append((r.void_seq, "ANULACION", -r.amount))
+        for p in self.payments.values():
+            if p.customer_id == cid and p.approved_seq is not None:
+                rows.append((p.approved_seq, "ABONO", -p.amount_usd))
+            if p.customer_id == cid and p.reversed_seq is not None:
+                rows.append((p.reversed_seq, "REVERSO", p.amount_usd))
+        for m in self.customers[cid].movements:
+            if m.type in ("ADJUSTMENT", "WALLET_PAYOUT"):
+                rows.append((m.seq, "AJUSTE" if m.type == "ADJUSTMENT" else "DEVOLUCION", -m.amount))
+        out, running = [], ZERO
+        for seq, kind, delta in sorted(rows):
+            running = q(running + delta)
+            out.append((seq, kind, q(delta), running))
+        return out
+
     def void_receivable(self, rid: int) -> None:
         """§3.11: solo MANUAL/OPENING_BALANCE/PAYMENT_REVERSAL; lo pagado vuelve a la billetera y settle lo reaplica."""
         r = self.receivables[rid]
@@ -498,7 +565,7 @@ class Shop:
         c = self.customers[r.customer_id]
         if r.paid > ZERO:
             self._move(c, "RECEIVABLE_REFUND", r.paid, receivable_id=r.id)
-        r.status, r.void_reason = RS.VOID, "VOIDED"
+        r.status, r.void_reason, r.void_seq = RS.VOID, "VOIDED", next(_SEQ)
         self.settle(c.id)
 
     def forgive_receivable(self, rid: int) -> None:
@@ -508,6 +575,7 @@ class Shop:
             raise DomainError("RECEIVABLE_NOT_VOIDABLE")
         r.forgiven = q(r.amount - r.paid)
         r.amount = r.paid
+        r.forgive_seq = next(_SEQ)
         if r.amount == ZERO:
             r.status, r.void_reason = RS.VOID, "FORGIVEN"
         else:

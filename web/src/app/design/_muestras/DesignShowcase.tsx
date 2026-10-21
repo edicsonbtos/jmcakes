@@ -121,10 +121,10 @@ export function DesignShowcase() {
             marca para foco y selección. Los datos de esta página son de ejemplo.
           </p>
           <nav aria-label="Pantallas de muestra" className="mt-4 flex flex-wrap gap-2">
-            <Link href="/design/ficha" className="inline-flex h-12 items-center rounded-pill bg-canvas-subtle px-5 font-semibold text-ink hover:bg-surface-sunken">
+            <Link href="/design/ficha" className="inline-flex h-12 items-center rounded-pill bg-canvas-subtle px-5 py-2 font-semibold text-ink hover:bg-surface-sunken">
               Muestra: ficha del cliente (390 px)
             </Link>
-            <Link href="/design/clientes" className="inline-flex h-12 items-center rounded-pill bg-canvas-subtle px-5 font-semibold text-ink hover:bg-surface-sunken">
+            <Link href="/design/clientes" className="inline-flex h-12 items-center rounded-pill bg-canvas-subtle px-5 py-2 font-semibold text-ink hover:bg-surface-sunken">
               Muestra: lista de clientes (1440 px)
             </Link>
           </nav>

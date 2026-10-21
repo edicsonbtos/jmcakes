@@ -72,7 +72,7 @@ export function ListRow({ leading, title, subtitle, trailing, href, onClick, che
     <>
       {leading}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={cn("truncate text-base font-semibold text-ink", struck && "text-ink-muted line-through decoration-1")}>{title}</span>
+        <span className={cn("line-clamp-2 break-words text-base font-semibold text-ink", struck && "text-ink-muted line-through decoration-1")}>{title}</span>
         {subtitle ? <span className="truncate text-sm text-ink-muted">{subtitle}</span> : null}
       </span>
       {trailing ? <span className="flex shrink-0 flex-col items-end gap-1 text-right">{trailing}</span> : null}

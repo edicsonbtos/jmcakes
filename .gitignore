@@ -29,3 +29,6 @@ google-services.json
 graphify-out/
 .impeccable/review/
 .impeccable/mocks/
+
+# worktrees temporales de los agentes del enjambre
+.claude/worktrees/

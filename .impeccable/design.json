@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T02:15:59+00:00",
+  "title": "Design System: Panel de la panadería",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Tinta de recibo",
+        "canonical": "#111111",
+        "tonalRamp": [
+          "#050505",
+          "#080808",
+          "#0C0C0C",
+          "#0F0F0F",
+          "#4C4C4C",
+          "#888888",
+          "#C4C4C4",
+          "#E7E7E7"
+        ]
+      },
+      "brand": {
+        "role": "primary",
+        "displayName": "Naranja de horno",
+        "canonical": "#C94C0A",
+        "tonalRamp": [
+          "#3C1703",
+          "#642605",
+          "#8D3507",
+          "#B14309",
+          "#D67947",
+          "#E4A684",
+          "#F2D2C2",
+          "#FAEDE6"
+        ]
+      },
+      "debt": {
+        "role": "secondary",
+        "displayName": "Rojo Debe",
+        "canonical": "#C4271B",
+        "tonalRamp": [
+          "#3B0C08",
+          "#62140E",
+          "#891B13",
+          "#AC2218",
+          "#D35D54",
+          "#E2938D",
+          "#F0C9C6",
+          "#F9E9E8"
+        ]
+      },
+      "favor": {
+        "role": "secondary",
+        "displayName": "Verde A favor",
+        "canonical": "#0A7A3F",
+        "tonalRamp": [
+          "#032513",
+          "#053D20",
+          "#07552C",
+          "#096B37",
+          "#479B6F",
+          "#84BC9F",
+          "#C2DECF",
+          "#E6F2EC"
+        ]
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Mostaza de aviso",
+        "canonical": "#8F5B00",
+        "tonalRamp": [
+          "#2B1B00",
+          "#482E00",
+          "#644000",
+          "#7E5000",
+          "#AB8440",
+          "#C7AD80",
+          "#E3D6BF",
+          "#F4EFE6"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Tinta suave",
+        "canonical": "#5C5C58",
+        "tonalRamp": [
+          "#1C1C1A",
+          "#2E2E2C",
+          "#40403E",
+          "#51514D",
+          "#858582",
+          "#AEAEAC",
+          "#D6D6D5",
+          "#EFEFEE"
+        ]
+      },
+      "canvas-subtle": {
+        "role": "neutral",
+        "displayName": "Gris de mostrador",
+        "canonical": "#F4F4F2"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#FFFFFF"
+      }
+    },
+    "darkMode": {
+      "canvas": "#0F0F0F",
+      "canvas-subtle": "#1B1B1B",
+      "ink": "#F4F4F2",
+      "ink-muted": "#A9A9A4",
+      "primary": "#F4F4F2",
+      "on-primary": "#111111",
+      "brand": "#FF7A33",
+      "brand-ink": "#FF9A5C",
+      "debt": "#FF7A6E",
+      "favor": "#5CCF8C",
+      "warn": "#F2C14E"
+    },
+    "typographyMeta": {
+      "amount": {
+        "displayName": "Monto",
+        "purpose": "Saldo de la ficha y Por cobrar; uno por pantalla."
+      },
+      "headline": {
+        "displayName": "Título de página",
+        "purpose": "Títulos en escritorio y login."
+      },
+      "row-title": {
+        "displayName": "Concepto de fila",
+        "purpose": "Concepto de movimientos y nombres en listas, hasta dos líneas."
+      },
+      "pill": {
+        "displayName": "Estado",
+        "purpose": "Chips con texto: Vencido, Detal, Mayor, Anulado."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet",
+        "value": "0 -8px 32px rgba(17, 17, 17, 0.16)",
+        "purpose": "Hojas inferiores y diálogos."
+      },
+      {
+        "name": "popover",
+        "value": "0 8px 24px rgba(17, 17, 17, 0.12)",
+        "purpose": "Avisos flotantes y pulgar del interruptor."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Toda transición de estado."
+      },
+      {
+        "name": "amount-in",
+        "value": "420ms: opacity 0→1, translateY(0.35em)→0, blur(6px)→0",
+        "purpose": "El saldo de la ficha entra al nuevo valor tras fiar o abonar."
+      },
+      {
+        "name": "sheet-up",
+        "value": "260ms translateY(100%)→0",
+        "purpose": "Las hojas suben desde abajo en el teléfono."
+      },
+      {
+        "name": "fast",
+        "value": "150ms",
+        "purpose": "Hover, presionado y selección."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Una acción negra por vista: Registrar abono, Entrar.",
+      "html": "<button class=\"ds-btn-primary\">Registrar abono</button>",
+      "css": ".ds-btn-primary{background:var(--color-primary,#111);color:var(--color-on-primary,#fff);height:48px;padding:0 20px;border:0;border-radius:12px;font:700 16px/1 'Archivo Variable',system-ui,sans-serif;transition:background-color .15s cubic-bezier(.2,.8,.2,1),transform .15s}.ds-btn-primary:hover{background:var(--color-primary-hover,#2E2E2C)}.ds-btn-primary:active{transform:scale(.98)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-focus,#C94C0A);outline-offset:2px}"
+    },
+    {
+      "name": "Botón secundario",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Fiar productos, Importar.",
+      "html": "<button class=\"ds-btn-secondary\">Fiar productos</button>",
+      "css": ".ds-btn-secondary{background:var(--color-canvas-subtle,#F4F4F2);color:var(--color-ink,#111);height:48px;padding:0 20px;border:0;border-radius:12px;font:700 16px/1 'Archivo Variable',system-ui,sans-serif;transition:background-color .15s}.ds-btn-secondary:hover{background:var(--color-surface-sunken,#EDEDEA)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-focus,#C94C0A);outline-offset:2px}"
+    },
+    {
+      "name": "Campo",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Caja gris; al enfocar, borde de tinta.",
+      "html": "<label class=\"ds-field\"><span>Referencia</span><input placeholder=\"Los dígitos del comprobante\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;font:600 14px/1.4 'Archivo Variable',system-ui,sans-serif;color:var(--color-ink,#111)}.ds-field input{height:48px;padding:0 16px;border:2px solid transparent;border-radius:12px;background:var(--color-canvas-subtle,#F4F4F2);font:400 16px 'Archivo Variable',system-ui,sans-serif;color:inherit;outline:none;transition:border-color .15s,background-color .15s}.ds-field input:focus-visible{border-color:var(--color-ink,#111);background:#fff}.ds-field input::placeholder{color:var(--color-ink-faint,#6B6B67)}"
+    },
+    {
+      "name": "Chips de filtro",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "Todos / Con deuda / Vencidos; selección en naranja de horno.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\">Todos</button><button class=\"ds-chip\" aria-pressed=\"false\">Con deuda</button><button class=\"ds-chip\" aria-pressed=\"false\">Vencidos</button></div>",
+      "css": ".ds-chips{display:flex;gap:8px}.ds-chip{height:40px;padding:0 16px;border-radius:9999px;border:1.5px solid var(--color-line,#E6E6E3);background:#fff;color:var(--color-ink,#111);font:600 14px 'Archivo Variable',system-ui,sans-serif;transition:border-color .15s,background-color .15s}.ds-chip:hover{border-color:var(--color-line-strong,#CFCFCB)}.ds-chip[aria-pressed=true]{border-color:var(--color-brand,#C94C0A);background:var(--color-brand-subtle,#FFF0E6);color:var(--color-brand-ink,#B8460A)}.ds-chip:focus-visible{outline:2px solid var(--color-focus,#C94C0A);outline-offset:2px}"
+    },
+    {
+      "name": "Saldo grande",
+      "kind": "custom",
+      "refersTo": "amount",
+      "description": "Firma de la ficha: rótulo, monto a 48 px, Bs y chip de vencido.",
+      "html": "<div class=\"ds-balance\"><span class=\"ds-balance-label\">Debe</span><span class=\"ds-balance-amount\">$97,00</span><span class=\"ds-balance-ves\">Bs 17.964,40 <b>● Vencido $61,00</b></span></div>",
+      "css": ".ds-balance{display:flex;flex-direction:column;font-family:'Archivo Variable',system-ui,sans-serif;color:var(--color-debt,#C4271B)}.ds-balance-label{font-weight:700;font-size:16px}.ds-balance-amount{font-size:48px;line-height:1;font-weight:800;font-stretch:88%;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.ds-balance-ves{margin-top:8px;font-size:18px;color:var(--color-ink-muted,#5C5C58);font-variant-numeric:tabular-nums}.ds-balance-ves b{margin-left:12px;padding:3px 10px;border-radius:9999px;background:var(--color-debt-subtle,#FDEDEB);color:var(--color-debt,#C4271B);font-size:12px;font-weight:700}"
+    },
+    {
+      "name": "Fila de movimiento",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Ícono en círculo, concepto, detalle y efecto con saldo.",
+      "html": "<div class=\"ds-row\"><span class=\"ds-row-icon\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 7 7 17\"/><path d=\"M17 17H7V7\"/></svg></span><span class=\"ds-row-main\"><b>Zelle · ref. ZL-88213</b><small>Abono · 12:05 p. m. · Admin</small></span><span class=\"ds-row-end\"><b>−$15,00</b><small>Saldo $97,00</small></span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 16px;font-family:'Archivo Variable',system-ui,sans-serif;border-bottom:1px solid var(--color-line,#E6E6E3);transition:background-color .15s}.ds-row:hover{background:var(--color-canvas-subtle,#F4F4F2)}.ds-row-icon{display:inline-flex;width:40px;height:40px;border-radius:9999px;align-items:center;justify-content:center;background:var(--color-favor-subtle,#E6F4EC);color:var(--color-favor,#0A7A3F)}.ds-row-main{flex:1;display:flex;flex-direction:column}.ds-row-main b{font-weight:600;color:var(--color-ink,#111)}.ds-row-main small,.ds-row-end small{font-size:13px;color:var(--color-ink-muted,#5C5C58)}.ds-row-end{display:flex;flex-direction:column;align-items:flex-end;font-variant-numeric:tabular-nums}.ds-row-end b{color:var(--color-favor,#0A7A3F)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "El cuaderno con factura de delivery",
+    "overview": "El panel reemplaza el cuaderno de deudas del mostrador y lo dibuja como la factura de una app de delivery: cada cliente es una ficha con su saldo enorme, la prueba del dinero (Bs debajo, chip de vencido) y dos acciones al alcance del pulgar. Es un sistema de salida estándar, con Uber y Rappi como vara de calidad: blanco y gris claro, tinta negra, un botón principal negro, hojas inferiores y un solo color de marca. Nada de tarjetas KPI en rejilla ni tablas apretadas.\n\nLa densidad es de app de teléfono aun en escritorio: filas de 64 px, toques de 48 px, montos muy pesados y estrechos con cifras tabulares. El color no decora: dice “Debe” (rojo), “A favor” (verde), qué está seleccionado o enfocado (naranja de horno) y nada más. Cada estado lleva texto; el color solo lo refuerza.\n\nEl movimiento existe en un solo momento: cuando se fía o se abona, el monto grande de la ficha entra al nuevo saldo con un fundido y desenfoque corto. Las hojas suben desde abajo en el teléfono y aparecen centradas en escritorio.",
+    "keyCharacteristics": [
+      "Restringido: neutros + un acento (naranja de horno) + dos colores de significado (Debe / A favor).",
+      "Una sola familia (Archivo), títulos y montos a 800 y estrechos; cifras tabulares en todo número.",
+      "Primario negro, uno por vista; secundario gris lleno; destructivo en rojo suave.",
+      "Planos por defecto: bordes de 1 px para separar, sombra solo en lo que flota (hojas, avisos).",
+      "El dinero lo calcula la API: la UI muestra USD con los Bs que manda el servidor."
+    ],
+    "rules": [
+      {
+        "name": "The Un Solo Horno Rule",
+        "body": "El naranja solo marca la marca, el foco y la selección. Nunca un botón, un fondo de sección ni un monto.",
+        "section": "colors"
+      },
+      {
+        "name": "The Debe Es Rojo Rule",
+        "body": "Rojo = la deuda sube o existe; verde = baja o hay saldo a favor. Ningún otro elemento usa esos dos colores, y siempre van con su palabra (“Debe”, “A favor”, “Vencido”).",
+        "section": "colors"
+      },
+      {
+        "name": "The Cifra Tabular Rule",
+        "body": "Todo número de dinero, fecha, hora o cantidad usa cifras tabulares (`tnum`). Los montos alineados a la derecha deben cuadrar como en un recibo.",
+        "section": "typography"
+      },
+      {
+        "name": "The Rótulo Antes Del Monto Rule",
+        "body": "Un monto grande siempre va con su rótulo (“Debe”, “A favor”, “Al día”, “Por cobrar”) y sus Bs debajo; nunca un número suelto.",
+        "section": "typography"
+      },
+      {
+        "name": "The Borde O Sombra Rule",
+        "body": "Cada superficie declara su elevación una vez: borde de 1 px o sombra, nunca ambos.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** mostrar cada monto en USD con sus Bs de la API debajo; sin tasa, “Bs —”.",
+      "**Do** poner una sola acción negra por vista y las dos acciones de la ficha en la barra fija inferior del teléfono.",
+      "**Do** usar hojas inferiores para fiar, abonar, anular y revertir, con el resultado (“queda debiendo $Z”) visible antes de confirmar.",
+      "**Do** dar a cada toque al menos 48 px y a cada estado su palabra.",
+      "**Do** usar solo los tokens de `globals.css`; la paleta por defecto de Tailwind está apagada (`--color-*: initial`)."
+    ],
+    "donts": [
+      "**Don't** usar el naranja para botones, fondos o montos: es marca, foco y selección.",
+      "**Don't** armar rejillas de tarjetas KPI ni tablas densas; los totales van como una cifra grande con su rótulo.",
+      "**Don't** escribir el nombre del negocio en el código: sale de `business.name`.",
+      "**Don't** combinar borde y sombra en la misma superficie, ni anidar tarjetas.",
+      "**Don't** animar más que el cambio de saldo, la entrada de las hojas y los avisos."
+    ]
+  }
+}

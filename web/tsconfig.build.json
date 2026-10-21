@@ -1,0 +1,15 @@
+{
+  "//": "Igual a tsconfig.json pero sin pruebas ni su configuración: el build de producción no instala devDependencies.",
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "src/test/**",
+    "e2e/**",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "vitest.config.*",
+    "vitest.setup.*",
+    "playwright.config.*"
+  ]
+}

@@ -41,11 +41,30 @@ Reutiliza **OpenGravity** (`/home/user/opengraviti` en el entorno de agentes). A
 15. **Código copiado de OpenGravity**, que es privado (este repo es público): leer antes `/home/user/panaderia-privado/NO-COPIAR-OPENGRAVITY.md` y sanear. Ni el código ni los documentos describen defectos de OpenGravity (`docs/plan/06` §Reglas).
 
 ## Comandos
-> FND completa esta sección con los comandos reales.
-
 ```bash
-pip install -r spec/requirements.txt && python -m pytest spec -q   # modelo ejecutable de las reglas de dinero
-# FND agregará: scripts/dev-setup.sh (venv + Postgres local + base del agente), pytest de api, export_openapi, mock
+# Entorno (venv .venv con Python 3.11, dependencias, Postgres local y la base del agente)
+TEST_DATABASE_URL=postgresql+psycopg://dev:dev@127.0.0.1:5432/panaderia_test_<id> scripts/dev-setup.sh
+
+# Modelo ejecutable de las reglas de dinero y coherencia del plan (desde la raíz)
+.venv/bin/python -m pytest spec -q
+
+# API (desde api/; TEST_DATABASE_URL es obligatorio y local)
+export TEST_DATABASE_URL=postgresql+psycopg://dev:dev@127.0.0.1:5432/panaderia_test_<id>
+../.venv/bin/python -m pytest -q                         # suite de la API
+../.venv/bin/python -m scripts.export_openapi            # regenera contracts/openapi.json (solo FND/orquestador lo commitea)
+../.venv/bin/python -m scripts.export_openapi --check     # el contrato está al día
+../.venv/bin/python -m scripts.export_openapi --count     # número de operaciones (E1: 52)
+DATABASE_URL=postgresql+psycopg://dev:dev@127.0.0.1:5432/<base> ../.venv/bin/alembic upgrade head
+DATABASE_URL=… ../.venv/bin/alembic check                # el esquema coincide con los modelos
+DATABASE_URL=… BOOTSTRAP_ADMIN_PHONE=… BOOTSTRAP_ADMIN_PASSWORD=… ../.venv/bin/python -m scripts.bootstrap
+DATABASE_URL=… JWT_SECRET=… ../.venv/bin/python -m uvicorn src.main:app --port <puerto del agente>
+
+# Mock del contrato (Prism) para la web
+MOCK_PORT=<puerto> api/scripts/mock.sh
+
+# Contrato y secretos (lo mismo que corre CI)
+npx --yes @stoplight/spectral-cli@6.16.3 lint contracts/openapi.json --ruleset contracts/.spectral.yaml --fail-severity error
+gitleaks dir . --config .gitleaks.toml                   # binario gitleaks v8; en CI: gitleaks-action
 ```
 
 ## Entorno de la nube (verificado el 2026-10-06)

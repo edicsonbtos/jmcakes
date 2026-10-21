@@ -3,7 +3,8 @@
  * `AdminCustomer` (+ `balance`, `balanceVes`) y `statement.rows`. Los montos y Bs vienen
  * escritos como los devolvería la API; aquí no se calcula dinero salvo en `mockFiadoQuote`,
  * que hace de `POST /fiado/quote` solo para que la muestra responda.
- * TODO(contrato): cambiar por los tipos de `api-types.ts` en G1.
+ * Las pantallas reales de W-E1 usan los tipos generados de `@/lib/api-types`; estas muestras
+ * conservan formas propias solo para la página /design.
  */
 import { fromScaled, toScaled } from "@/lib/money";
 

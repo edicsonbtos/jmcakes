@@ -1,6 +1,6 @@
 # FND — Fundación de la API, base de datos y contrato
 
-> **Etapa E1 (v2.5):** esta ficha la ejecuta **FND-E1**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **FND-E1**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (52 operaciones), recortes, costuras y aceptación CU-1…CU-12.
 
 **Fase 0** (en paralelo con DSN) · rama `block/FND` · BD de pruebas `panaderia_test_fnd` · reutiliza OpenGravity según [06](../06-reutilizacion-opengravity.md), **saneando** lo que se copia.
 
@@ -33,7 +33,7 @@ Dejar `api/` lista para que B1, B2 y B3 trabajen en paralelo sin tocar archivos 
      - **todos los routers de 08 registrados**.
    - **Jobs ya registrados** con su horario y un `run(session)` vacío: `jobs/{bcv_sync,unpaid_auto_cancel,daily_closing}.py`. Los dueños solo completan `run`.
 3. **Modelos y migración**
-   - Todos los `db_models.py` de [02](../02-modelo-de-datos.md), con restricciones **nombradas** en los modelos: CHECKs, índice parcial `uq_payments_method_reference_live`, `uq_orders_customer_idem`, `uq_payments_customer_idem` y la secuencia `order_number_seq` desde 1001.
+   - Todos los `db_models.py` de [02](../02-modelo-de-datos.md), con restricciones **nombradas** en los modelos: CHECKs, índice parcial `uq_payments_bank_account_reference_live`, `uq_orders_customer_idem`, `uq_payments_customer_idem` y la secuencia `order_number_seq` desde 1001.
    - Una revisión Alembic inicial. `alembic/env.py` usa `DATABASE_URL_DIRECT` si existe.
 4. **Auth completa:** register (crea un customer CASH), login con rate limit por IP + teléfono, refresh rotativo, logout, me, device-tokens y `DELETE /auth/account`. Dependencias `get_current_user`, `require_role(*roles)` y `get_current_customer`.
 5. **Contrato completo**

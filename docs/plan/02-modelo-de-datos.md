@@ -224,6 +224,6 @@ WHERE "balanceAfter" <> run;
 -- I-9 paymentStatus de pedidos a crédito
 SELECT o.id FROM orders o JOIN receivables r ON r."orderId" = o.id
 WHERE o.status <> 'CANCELLED'
-  AND o."paymentStatus" <> CASE WHEN r.status IN ('OPEN','PARTIAL') THEN 'ON_CREDIT' ELSE 'PAID' END;
+  AND o."paymentStatus"::text <> CASE WHEN r.status IN ('OPEN','PARTIAL') THEN 'ON_CREDIT' ELSE 'PAID' END;
 ```
 **I-8 (no es SQL):** cocina y delivery solo ven CONFIRMED, PREPARING o READY, y sus esquemas no tienen campos de dinero. FND lo prueba sobre el OpenAPI (`KitchenCard`, `DeliveryCard`, `OrderEventData`).

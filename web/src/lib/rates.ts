@@ -1,16 +1,11 @@
 import { apiFetch } from "./api";
+import type { components } from "./api-types";
 import { fmtDayMonth, fmtRate } from "./format";
 
 /**
  * `Rate{date, value, rateType, isFallback}` de 08 §Convenciones.
- * TODO(contrato): reemplazar por el tipo de `api-types.ts` en G1.
  */
-export type Rate = {
-  date: string;
-  value: string;
-  rateType: "BCV" | "MANUAL" | string;
-  isFallback: boolean;
-};
+export type Rate = components["schemas"]["RateOut"];
 
 /** `GET /rates/today` (público). `null` si la API responde `409 RATE_UNAVAILABLE` o no responde. */
 export async function getTodayRate(): Promise<Rate | null> {

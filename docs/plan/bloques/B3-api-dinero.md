@@ -1,6 +1,6 @@
 # B3 — API de dinero: pagos, billetera, CxC, cuentas, tasa, dashboard y cierres
 
-> **Etapa E1 (v2.5):** esta ficha la ejecuta **B-E1b**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **B-E1b**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (52 operaciones), recortes, costuras y aceptación CU-1…CU-12.
 
 **Fase 1** · rama `block/B3` · BD `panaderia_test_b3` · [08](../08-api-endpoints.md) §B3 · reglas [03](../03-flujos-de-negocio.md) §0, §3 y §6 · referencia ejecutable `spec/money_model.py`
 

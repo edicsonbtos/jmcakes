@@ -1,6 +1,6 @@
 # B1 — API: catálogo, archivos, clientes, usuarios y configuración
 
-> **Etapa E1 (v2.5):** esta ficha la ejecuta **B-E1a**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (51 operaciones), recortes, costuras y aceptación CU-1…CU-12.
+> **Etapa E1 (v2.5):** esta ficha la ejecuta **B-E1a**, recortada según [09 §E1 — Agentes](../09-etapas-admin-primero.md). En E1 manda 09: rama, carpetas, inventario (52 operaciones), recortes, costuras y aceptación CU-1…CU-12.
 
 **Fase 1** · rama `block/B1` · BD `panaderia_test_b1` · endpoints y archivos de router: [08](../08-api-endpoints.md) §B1
 

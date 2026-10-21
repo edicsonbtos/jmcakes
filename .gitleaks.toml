@@ -1,0 +1,21 @@
+# gitleaks: reglas por defecto + lista blanca de los valores de ejemplo públicos del modo mock.
+# Local: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source /repo --config /repo/.gitleaks.toml
+title = "jmcakes"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Secreto del mock y JWT de ejemplo (exp 2099) del contrato; no sirven en producción."
+regexes = [
+  '''dev-mock-secret-no-usar-en-prod''',
+  '''Xq3v9LmT2pR7sK1wZ8yB4nC6dF0gH5jA-ejemplo-mock''',
+  # Contraseñas y tokens de vista previa de ejemplo del contrato y de las pruebas.
+  '''Pan-dulce-2026|Temporal-1234|Temporal-5678|Cachitos-de-jamon-7|Clave-de-prueba-123''',
+  '''bp_9f2c1e7a4b6d8e0f|imp_7c2e9a1f4b8d3e6a''',
+]
+paths = [
+  '''contracts/openapi\.json''',
+  '''web/src/lib/api-types\.ts''',
+  '''(^|/)fixtures/''',
+]

@@ -1,0 +1,36 @@
+# Reglas del contrato (docs/plan/01 §Convenciones 2): JSON y parámetros en camelCase.
+# Local: npx --yes @stoplight/spectral-cli@6.16.3 lint contracts/openapi.json --ruleset contracts/.spectral.yaml
+extends:
+  - [spectral:oas, recommended]
+rules:
+  # Los tags y los contactos no aportan en un contrato interno.
+  openapi-tags: off
+  operation-tags: off
+  operation-tag-defined: off
+  operation-description: off
+  info-contact: off
+  oas3-api-servers: off
+  propiedades-camel-case:
+    description: Las propiedades de los esquemas van en camelCase.
+    severity: error
+    given: "$.components.schemas[*]..properties"
+    then:
+      field: "@key"
+      function: casing
+      functionOptions:
+        type: camel
+  parametros-camel-case:
+    description: Los parámetros de consulta y de ruta van en camelCase.
+    severity: error
+    given: "$.paths[*][*].parameters[?(@.in == 'query' || @.in == 'path')].name"
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+  operacion-con-x-roles:
+    description: Toda operación declara sus roles en x-roles.
+    severity: error
+    given: "$.paths[*][get,post,patch,put,delete]"
+    then:
+      field: x-roles
+      function: truthy

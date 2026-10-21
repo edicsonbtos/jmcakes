@@ -1,0 +1,14 @@
+# Servicio `api` en Railway (docs/plan/01 §Despliegue). rootDirectory = api; railwayConfigFile = /api/railway.toml.
+# Python 3.11 sale de api/.python-version (Railpack).
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers"
+preDeployCommand = "alembic upgrade head && python -m scripts.bootstrap"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+region = "us-east4"

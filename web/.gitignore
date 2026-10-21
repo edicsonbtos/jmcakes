@@ -1,0 +1,4 @@
+# Capturas de Playwright (se suben como artifact en CI, no se commitean)
+e2e-capturas/
+next-env.d.ts
+*.tsbuildinfo

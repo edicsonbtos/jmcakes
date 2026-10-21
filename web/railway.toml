@@ -1,0 +1,12 @@
+# Servicio "web" (rootDirectory = web). En Railway fijar railwayConfigFile=/web/railway.toml (01 §Despliegue).
+[build]
+builder = "RAILPACK"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npx next start --hostname 0.0.0.0 --port $PORT"
+healthcheckPath = "/login"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+numReplicas = 1

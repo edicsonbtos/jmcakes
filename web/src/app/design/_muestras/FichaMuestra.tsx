@@ -62,13 +62,12 @@ export function FichaMuestra() {
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <PageHeader back={{ href: "/design/clientes", label: "Clientes" }} title={cliente.contactName} />
 
-      <div className="-mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+      <div className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
         <StatusPill tone="neutral">{cliente.type === "WHOLESALE" ? "Mayor" : "Detal"}</StatusPill>
+        {/* Cada dato es un bloque: al partir la línea no queda un separador colgando. */}
         <span className="tnum">{cliente.phone ? formatVePhone(cliente.phone) : "Sin teléfono"}</span>
-        <span aria-hidden>·</span>
         <span>Crédito {cliente.creditDays} días</span>
-        <span aria-hidden>·</span>
-        <span className="tnum">Límite {fmtUsd(cliente.creditLimit)}</span>
+        {cliente.creditLimit !== "0.00" ? <span className="tnum">Límite {fmtUsd(cliente.creditLimit)}</span> : null}
       </div>
 
       <BalanceFigure balance={balance.usd} balanceVes={balance.ves}>
@@ -251,7 +250,10 @@ function AbonoSheet({
         <div className="flex flex-col gap-3">
           <div className="rounded-md bg-canvas-subtle px-4 py-3" aria-live="polite">
             <p className="text-base font-bold tnum text-ink">
-              Abona {fmtUsd(ABONO_QUOTE.amountUsd)} ({fmtBs(ABONO_QUOTE.amountLocal)} a tasa del {day})
+              Abona {fmtUsd(ABONO_QUOTE.amountUsd)}{" "}
+              <span className="whitespace-nowrap font-medium text-ink-muted">
+                ({fmtBs(ABONO_QUOTE.amountLocal)} a tasa del {day})
+              </span>
             </p>
             <p className="mt-0.5 text-base tnum text-ink-muted">
               → queda debiendo <span className="font-bold text-debt">{fmtUsd(ABONO_QUOTE.balanceAfter)}</span>

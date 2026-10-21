@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  */
 export function BrandMark({ name, compact = false, className }: { name: string; compact?: boolean; className?: string }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center gap-2.5", className)}>
+    <span className={cn("inline-flex min-w-0 max-w-full items-center gap-2.5", className)}>
       <span
         aria-hidden
         className="inline-flex size-9 shrink-0 items-center justify-center rounded-pill bg-brand text-lg font-heavy leading-none text-on-brand"

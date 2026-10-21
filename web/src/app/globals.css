@@ -261,6 +261,13 @@
   }
 }
 
+/* La barra de acciones fija de la ficha no tapa el final del contenido en el teléfono. */
+@media (width < 48rem) {
+  body:has([data-action-bar]) #contenido {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

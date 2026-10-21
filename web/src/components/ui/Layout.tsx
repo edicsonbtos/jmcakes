@@ -70,22 +70,21 @@ export function Section({
 
 /**
  * Barra de acciones al alcance del pulgar: fija abajo en el teléfono (con el área segura)
- * y en línea desde 768 px. Úsala para las dos acciones de la ficha.
+ * y en línea desde 768 px. Úsala para las dos acciones de la ficha. `globals.css` reserva su
+ * alto al final de la página (`body:has([data-action-bar])`), así nada queda tapado.
  */
 export function ActionBar({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <>
-      {/* Reserva el alto de la barra para que el final de la lista no quede debajo. */}
-      <div aria-hidden className="h-24 md:hidden" />
-      <div
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-          "md:static md:z-auto md:border-0 md:bg-transparent md:p-0",
-          className,
-        )}
-      >
-        <div className="mx-auto grid max-w-3xl grid-cols-2 gap-3">{children}</div>
-      </div>
-    </>
+    <div
+      data-action-bar=""
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        "md:static md:z-auto md:border-0 md:bg-transparent md:p-0",
+        className,
+      )}
+    >
+      {/* Botones compactos en el teléfono para que "Registrar abono" quepa entero a 390 px. */}
+      <div className="mx-auto grid max-w-3xl grid-cols-2 gap-3 max-md:[&_button]:px-3 max-md:[&_button]:text-base">{children}</div>
+    </div>
   );
 }

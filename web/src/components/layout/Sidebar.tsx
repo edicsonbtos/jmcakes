@@ -71,7 +71,7 @@ export function Sidebar({ businessName, rate, activePath }: { businessName: stri
     <>
       {/* Escritorio */}
       <aside className="sticky top-0 hidden h-dvh w-[var(--size-sidebar)] shrink-0 flex-col border-r border-line bg-canvas px-3 py-5 lg:flex">
-        <Link href="/admin" className="mx-1 rounded-md px-2 py-1" aria-label={`${businessName}: inicio`}>
+        <Link href="/admin" className="mx-1 block min-w-0 rounded-md px-2 py-1" aria-label={`${businessName}: inicio`}>
           <BrandMark name={businessName} />
         </Link>
         <nav aria-label="Secciones" className="mt-8 flex flex-col gap-1">
